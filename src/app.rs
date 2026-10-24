@@ -846,17 +846,33 @@ fn render_story(state: &State) {
                 "story-source",
                 &format!(
                     "{} · {} ↗",
-                    tr(
-                        l,
-                        [
-                            "查看原始资料",
-                            "Original source",
-                            "一次資料を見る",
-                            "Fuente original"
-                        ]
-                    ),
-                    if state.deep && score_available && m.score_observed {
-                        "Mercor"
+                    if state.deep && score_available {
+                        tr(
+                            l,
+                            [
+                                "评测来源",
+                                "Evaluation source",
+                                "評価の出典",
+                                "Fuente de la evaluación",
+                            ],
+                        )
+                    } else {
+                        tr(
+                            l,
+                            [
+                                "查看原始资料",
+                                "Original source",
+                                "一次資料を見る",
+                                "Fuente original",
+                            ],
+                        )
+                    },
+                    if state.deep && score_available {
+                        if m.score_observed {
+                            "Mercor"
+                        } else {
+                            m.benchmark
+                        }
                     } else {
                         m.organization
                     }
