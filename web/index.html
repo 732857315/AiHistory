@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f7f7ed">
+  <meta name="theme-color" content="#151713">
   <meta name="description" content="从石器、自动人偶、编程与神经网络，到现代模型的星河追逐。四种语言、历史剪影、能力讲解与有来源的模型评测，大小朋友一起探索。">
   <title>AiHistory · 从工具到智能</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=__BUILD_ID__">
 </head>
 <body>
   <div id="app"><main class="loading"><div class="brand-mark">ai</div><h1>AiHistory</h1><p>正在打开时光机 · Opening the time machine…</p></main></div>
   <noscript><p class="loading">请启用 JavaScript 与 WebAssembly 以观看影片。Enable JavaScript and WebAssembly to explore.</p></noscript>
   <script type="module">
-    import init from './pkg/aihistory.js';
-    init().catch(() => {
+    import init from './pkg/aihistory.js?v=__BUILD_ID__';
+    init({module_or_path: new URL('./pkg/aihistory_bg.wasm?v=__BUILD_ID__', import.meta.url)}).catch(() => {
       const message = document.createElement('p');
       message.textContent = '暂时无法打开时光机，请刷新重试。Unable to load. Please refresh and try again.';
       message.className = 'loading';

@@ -12,6 +12,7 @@ the GitHub Pages project path. No browser behavior is mocked.
 from __future__ import annotations
 
 import argparse
+import base64
 import functools
 import json
 import mimetypes
@@ -126,9 +127,9 @@ def wait_for_canvas(page) -> None:
 def check_playback(page) -> None:
     canvas = page.locator("#film")
     assert page.locator("#sound-toggle").get_attribute("aria-pressed") == "true", "Sound must be enabled by default"
-    gate = page.locator("#audio-gate")
-    if gate.is_visible():
-        gate.click()
+    # The initial gate is exercised explicitly in verify(). After a seek the
+    # already-unlocked context resumes asynchronously, so its transient gate
+    # must not be mistaken for a second activation request.
     if canvas.get_attribute("data-playing") != "true":
         page.locator("#play-toggle").click()
     before = float(canvas.get_attribute("data-time"))
@@ -148,6 +149,91 @@ def check_no_overflow(page) -> None:
     ), "Page has horizontal overflow"
 
 
+def set_details_open(page, selector: str, opened: bool) -> None:
+    """Use the visible summary control; never force the DOM's open state."""
+    from playwright.sync_api import expect
+
+    panel = page.locator(selector)
+    if not panel.count():
+        return
+    assert panel.evaluate("node => node.tagName === 'DETAILS'"), f"Expected a details panel: {selector}"
+    if (panel.get_attribute("open") is not None) != opened:
+        panel.locator(":scope > summary").click()
+    if opened:
+        expect(panel).to_have_attribute("open", "")
+    else:
+        assert panel.get_attribute("open") is None, f"Panel did not close: {selector}"
+
+
+def reveal_details_ancestors(page, selector: str) -> None:
+    """Open outer disclosures before interacting with a control inside them."""
+    for panel in page.locator(selector).locator("xpath=ancestor::details[not(@open)]").all():
+        panel.locator(":scope > summary").click()
+
+
+def open_insight(page) -> None:
+    set_details_open(page, "#insight-panel", True)
+
+
+def open_archive(page) -> None:
+    from playwright.sync_api import expect
+
+    set_details_open(page, "#archive-panel", True)
+    reveal_details_ancestors(page, "#search")
+    search = page.locator("#search")
+    if not search.is_visible() and page.locator("#archive-toggle").is_visible():
+        page.locator("#archive-toggle").click()
+    expect(search).to_be_visible()
+
+
+def choose_history(page, index: int) -> None:
+    selector = f'#timeline-list [data-action="seek"][data-index="{index}"]'
+    reveal_details_ancestors(page, selector)
+    page.locator(selector).click()
+
+
+def check_stage_layout(page, label: str) -> dict:
+    """Measure the actual visible narrative and primary controls, not the archive."""
+    from playwright.sync_api import expect
+
+    check_no_overflow(page)
+    selectors = ("#film", "#scene-caption", "#scene-summary", "#progress", "#play-toggle", "#sound-toggle")
+    for selector in selectors:
+        expect(page.locator(selector)).to_be_visible()
+    metrics = page.evaluate(
+        """() => {
+            const read = selector => {
+                const node = document.querySelector(selector);
+                const r = node.getBoundingClientRect();
+                const style = getComputedStyle(node);
+                const x = r.left + r.width / 2, y = r.top + r.height / 2;
+                const hit = document.elementFromPoint(x, y);
+                return {x:r.x, y:r.y, width:r.width, height:r.height,
+                    font:Number.parseFloat(style.fontSize), text:node.textContent.trim(),
+                    unobstructed:hit !== null && (hit === node || node.contains(hit))};
+            };
+            return {viewport:{width:innerWidth,height:innerHeight},
+                stage:read('#stage-shell'), canvas:read('#film'),
+                caption:read('#scene-caption'), summary:read('#scene-summary'),
+                play:read('#play-toggle'), sound:read('#sound-toggle'), progress:read('#progress')};
+        }"""
+    )
+    viewport = metrics["viewport"]
+    assert metrics["stage"]["width"] >= viewport["width"] * 0.80, f"{label}: the cinematic stage is too narrow"
+    for name in ("caption", "summary"):
+        item = metrics[name]
+        assert item["text"], f"{label}: missing active {name}"
+        assert item["font"] >= 14.0, f"{label}: {name} is only {item['font']}px"
+        assert item["height"] > 0 and item["x"] >= -1, f"{label}: {name} is clipped"
+        assert item["x"] + item["width"] <= viewport["width"] + 1, f"{label}: {name} exceeds viewport width"
+    for name in ("play", "sound"):
+        item = metrics[name]
+        assert item["width"] >= 36 and item["height"] >= 36, f"{label}: {name} target is too small"
+        assert item["unobstructed"], f"{label}: {name} is covered or outside the viewport"
+    assert metrics["progress"]["unobstructed"], f"{label}: progress is covered or outside the viewport"
+    return metrics
+
+
 def pause_and_check(page) -> None:
     from playwright.sync_api import expect
 
@@ -156,10 +242,32 @@ def pause_and_check(page) -> None:
         page.locator("#play-toggle").click()
     expect(canvas).to_have_attribute("data-playing", "false")
     before = float(canvas.get_attribute("data-time"))
+    # Read the backing pixels directly: element screenshots scroll a deliberately
+    # cropped mobile canvas into view, changing the screenshot's clipping area.
+    page.wait_for_timeout(120)
+    before_box = canvas.bounding_box()
+    frame = canvas.evaluate("node => node.toDataURL('image/png')")
     # Observe multiple real animation frames while the transport is paused.
     page.wait_for_timeout(350)
     after = float(canvas.get_attribute("data-time"))
     assert abs(after - before) < 0.002, f"Paused transport advanced: {before} -> {after}"
+    after_frame = canvas.evaluate("node => node.toDataURL('image/png')")
+    if frame != after_frame:
+        output = LOCAL / "screenshots"
+        output.mkdir(parents=True, exist_ok=True)
+        viewport = page.viewport_size
+        stem = f"pause-{viewport['width']}x{viewport['height']}-{before:.1f}"
+        (output / f"{stem}-before.png").write_bytes(base64.b64decode(frame.split(",", 1)[1]))
+        (output / f"{stem}-after.png").write_bytes(base64.b64decode(after_frame.split(",", 1)[1]))
+        raise AssertionError(
+            f"Paused canvas changed at {before:.3f}s; viewport={viewport}; "
+            f"bounds={before_box} -> {canvas.bounding_box()}; frames={stem}"
+        )
+    after_box = canvas.bounding_box()
+    assert before_box and after_box
+    assert all(abs(before_box[key] - after_box[key]) < 0.1 for key in before_box), (
+        f"Paused canvas moved on screen: {before_box} -> {after_box}"
+    )
 
 
 def seek_final_scene(page) -> float:
@@ -180,9 +288,12 @@ def seek_final_scene(page) -> float:
 
 
 def screenshot_scene(page, output: Path, name: str) -> None:
+    set_details_open(page, "#archive-panel", False)
+    set_details_open(page, "#insight-panel", False)
     page.locator("#experience").scroll_into_view_if_needed()
     check_no_overflow(page)
     page.screenshot(path=str(output / f"{name}.png"), full_page=True)
+    page.screenshot(path=str(output / f"{name}-viewport.png"))
     page.locator("#stage-shell").screenshot(path=str(output / f"{name}-stage.png"))
 
 
@@ -200,6 +311,7 @@ def verify(base: str, browser_path: str | None) -> dict:
     errors: list[str] = []
     failed_requests: list[str] = []
     media_requests: list[str] = []
+    layouts: dict[str, dict] = {}
     media_extensions = {".mp4", ".mp3", ".wav", ".webm", ".ogg", ".m4a", ".flac", ".avi", ".mov", ".aac"}
     media_files = [
         str(path.relative_to(ROOT))
@@ -215,7 +327,8 @@ def verify(base: str, browser_path: str | None) -> dict:
         page.on(
             "request",
             lambda request: media_requests.append(request.url)
-            if Path(urllib.parse.urlsplit(request.url).path).suffix.lower() in media_extensions
+            if request.resource_type == "media"
+            or Path(urllib.parse.urlsplit(request.url).path).suffix.lower() in media_extensions
             else None,
         )
         page.on(
@@ -231,7 +344,7 @@ def verify(base: str, browser_path: str | None) -> dict:
             headless=True,
             args=["--autoplay-policy=document-user-activation-required"],
         )
-        context = browser.new_context(viewport={"width": 1440, "height": 1100}, locale="zh-CN")
+        context = browser.new_context(viewport={"width": 1440, "height": 900}, locale="zh-CN")
         context.add_init_script(AUDIO_PROBE_SCRIPT)
         page = context.new_page()
         watch(page)
@@ -245,6 +358,10 @@ def verify(base: str, browser_path: str | None) -> dict:
         model_cards = page.locator("#model-grid .model-card")
         expect(model_cards).to_have_count(20)
         wait_for_canvas(page)
+        for selector in ("#archive-panel", "#insight-panel"):
+            panel = page.locator(selector)
+            if panel.count():
+                assert panel.get_attribute("open") is None, f"Initial view must keep {selector} folded"
         expect(page.locator("video, audio")).to_have_count(0)
         expect(page.locator("#sound-toggle")).to_have_attribute("aria-pressed", "true")
         # A strict autoplay policy must leave a visible, working activation gate.
@@ -260,6 +377,7 @@ def verify(base: str, browser_path: str | None) -> dict:
             timeout=10_000,
         )
         audible_peak = page.evaluate("window.__aiHistoryAudiblePeak")
+        assert 0.0001 < audible_peak <= 1.0, "Synthesized sound is silent or clips"
 
         # Mute intentionally suspends audio processing to save CPU. Check the
         # native context and its frozen clock; an analyser keeps stale samples
@@ -292,27 +410,30 @@ def verify(base: str, browser_path: str | None) -> dict:
         expect(page.locator("#event-0")).to_have_attribute("aria-current", "step")
         assert float(page.locator("#film").get_attribute("data-time")) == 0.0
         screenshot_scene(page, output, "desktop-start")
+        layouts["desktop-start"] = check_stage_layout(page, "desktop start")
 
         # Seek through a real timeline control before changing language. This
         # makes playback-reset bugs observable instead of only checking t=0.
-        timeline.nth(3).click()
+        choose_history(page, 3)
         expect(page.locator("#event-3")).to_have_attribute("aria-current", "step")
         expect(page.locator("#story-number")).to_have_text("04 / 16")
         assert page.locator("#story-source").get_attribute("href").startswith("https://")
         for code in ("en", "ja", "es", "zh"):
             previous = float(page.locator("#film").get_attribute("data-time"))
-            old_text = page.locator("#hero-title").inner_text()
+            old_text = page.locator("#scene-summary").inner_text()
             language.select_option(code)
             expect(language).to_have_value(code)
             expect(page.locator("html")).to_have_attribute("lang", re.compile(rf"^{code}(?:-|$)"))
-            expect(page.locator("#hero-title")).not_to_have_text(old_text)
+            expect(page.locator("#scene-summary")).not_to_have_text(old_text)
             wait_for_canvas(page)
             current = float(page.locator("#film").get_attribute("data-time"))
             assert previous - 0.1 <= current <= previous + 3.0, f"Language {code} moved the transport"
             expect(page.locator("#film")).to_have_attribute("data-playing", "true")
             check_playback(page)
+            check_no_overflow(page)
 
         # Deep reading pauses the film, giving readers time to inspect sources.
+        open_insight(page)
         page.locator("#mode-deep").click()
         expect(page.locator("#mode-deep")).to_have_attribute("aria-pressed", "true")
         expect(page.locator("#story-detail")).to_be_visible()
@@ -326,24 +447,42 @@ def verify(base: str, browser_path: str | None) -> dict:
         page.locator("#text-size").click()
 
         # The early CNN scene deliberately receives more screen time.
-        timeline.nth(12).click()
+        choose_history(page, 12)
         pause_and_check(page)
         expect(page.locator("#event-12")).to_have_attribute("aria-current", "step")
         expect(page.locator("#stage-date")).to_contain_text("1989")
         expect(page.locator("#story-number")).to_have_text("13 / 16")
         screenshot_scene(page, output, "desktop-cnn")
+        layouts["desktop-cnn"] = check_stage_layout(page, "desktop CNN")
+
+        # Keep representative artwork available for a human visual review.
+        # Functional canvas changes alone cannot establish illustration quality.
+        for index, name in (
+            (2, "desktop-theatre"),
+            (3, "desktop-automata"),
+            (4, "desktop-writer"),
+            (8, "desktop-neuron"),
+            (15, "desktop-transformer"),
+        ):
+            choose_history(page, index)
+            check_playback(page)
+            pause_and_check(page)
+            screenshot_scene(page, output, name)
 
         # The atlas filters models, and its cards seek to actual release dates.
+        open_archive(page)
         search = page.locator("#search")
         search.fill("DeepSeek-R1")
         expect(model_cards).to_have_count(1)
         expect(page.locator("#result-count")).to_have_text("1")
         model_name = model_cards.first.locator("strong").inner_text()
         model_cards.first.click()
+        open_insight(page)
         expect(page.locator("#story-title")).to_have_text(model_name)
         expect(page.locator("#film")).to_have_attribute("data-playing", "false")
         expect(page.locator("#story-detail")).to_be_visible()
         expect(page.locator("#event-race")).to_have_attribute("aria-current", "step")
+        open_archive(page)
         search.fill("no-matching-model-12345")
         expect(model_cards).to_have_count(0)
         expect(page.locator("#model-grid .empty-results")).to_be_visible()
@@ -354,6 +493,7 @@ def verify(base: str, browser_path: str | None) -> dict:
         search.fill("Gemini 3.1 Pro Preview")
         expect(model_cards).to_have_count(1)
         model_cards.first.click()
+        open_insight(page)
         expect(page.locator("#story-title")).to_have_text("Gemini 3.1 Pro Preview")
         page.locator("#benchmark").select_option("2")
         expect(page.locator("#active-track")).to_contain_text(
@@ -362,11 +502,13 @@ def verify(base: str, browser_path: str | None) -> dict:
         expect(page.locator("#active-track")).to_contain_text("2026-10-24")
         expect(page.locator("#leaderboard .rank-row")).to_have_count(0)
         expect(page.locator("#leaderboard .rank-empty")).to_be_visible()
+        open_archive(page)
         search.fill("")
         expect(model_cards).to_have_count(20)
 
         # Inspect the final published comparisons; protocols must never merge.
         duration = seek_final_scene(page)
+        open_insight(page)
         benchmark = page.locator("#benchmark")
         benchmark.select_option("0")
         expect(page.locator("#active-track")).to_have_text("MMLU · 5-shot / no-CoT")
@@ -398,11 +540,13 @@ def verify(base: str, browser_path: str | None) -> dict:
         expect(benchmark).to_have_value("auto")
         benchmark.select_option("2")
         screenshot_scene(page, output, "desktop-galaxy")
+        layouts["desktop-galaxy"] = check_stage_layout(page, "desktop galaxy")
 
         # Keyboard navigation must reach a visible control without script focus.
         page.locator("#progress").press("Tab")
         page.keyboard.press("Tab")
         assert page.locator(":focus").count() == 1, "Keyboard focus is missing"
+        expect(page.locator(":focus")).to_be_visible()
         check_no_overflow(page)
 
         mobile_context = browser.new_context(
@@ -420,30 +564,57 @@ def verify(base: str, browser_path: str | None) -> dict:
         assert float(mobile.locator("#film").get_attribute("data-time")) == 0.0
         pause_and_check(mobile)
         screenshot_scene(mobile, output, "mobile-start")
-        mobile.locator('#timeline-list [data-action="seek"][data-index="12"]').click()
+        layouts["mobile-start"] = check_stage_layout(mobile, "mobile start")
+        choose_history(mobile, 12)
         pause_and_check(mobile)
         expect(mobile.locator("#stage-date")).to_contain_text("1989")
         screenshot_scene(mobile, output, "mobile-cnn")
+        layouts["mobile-cnn"] = check_stage_layout(mobile, "mobile CNN")
+        open_insight(mobile)
         mobile.locator("#jump-race").click()
         expect(mobile.locator("#event-race")).to_have_attribute("aria-current", "step")
         seek_final_scene(mobile)
+        open_insight(mobile)
         mobile.locator("#benchmark").select_option("2")
         screenshot_scene(mobile, output, "mobile-galaxy")
+        layouts["mobile-galaxy"] = check_stage_layout(mobile, "mobile galaxy")
         check_no_overflow(mobile)
+        open_archive(mobile)
+        mobile.locator("#search").fill("GPT-6.1 Sol")
+        expect(mobile.locator("#model-grid .model-card")).to_have_count(1)
+        mobile.locator("#model-grid .model-card").click()
+        expect(mobile.locator("#story-title")).to_have_text("GPT-6.1 Sol")
+        expect(mobile.locator("#film")).to_have_attribute("data-playing", "false")
+        set_details_open(mobile, "#archive-panel", False)
+        set_details_open(mobile, "#insight-panel", False)
+        mobile.set_viewport_size({"width": 360, "height": 800})
+        screenshot_scene(mobile, output, "mobile-narrow")
+        layouts["mobile-narrow"] = check_stage_layout(mobile, "360px mobile")
         mobile.locator("#text-size").click()
         expect(mobile.locator("#text-size")).to_have_attribute("aria-pressed", "true")
         check_no_overflow(mobile)
         mobile.screenshot(path=str(output / "mobile-large-text.png"), full_page=True)
+        mobile.screenshot(path=str(output / "mobile-large-text-viewport.png"))
+        # A disclosure must remain keyboard-operable and expose its sources.
+        open_insight(mobile)
+        mobile.locator("#mode-deep").click()
+        expect(mobile.locator("#story-detail")).to_be_visible()
+        expect(mobile.locator("#story-source")).to_be_visible()
+        check_no_overflow(mobile)
         browser.close()
 
     assert not failed_requests, "HTTP errors: " + "; ".join(failed_requests)
     assert not errors, "Browser errors: " + "; ".join(errors)
     assert not media_requests, "Encoded media requests are forbidden: " + "; ".join(media_requests)
+    (output / "layout-metrics.json").write_text(
+        json.dumps(layouts, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return {
         "timeline_events": 16, "models": 20, "duration_seconds": duration,
         "languages": ["zh", "en", "ja", "es"], "ranking_protocols_checked": 3,
         "audio_peak_unmuted": audible_peak, "muted_audio_clock_advance": muted_clock_advance,
-        "reduced_motion_starts_paused": True, "screenshots": str(output),
+        "reduced_motion_starts_paused": True, "paused_canvas_stays_still": True,
+        "layouts_checked": list(layouts), "screenshots": str(output),
     }
 
 

@@ -7,6 +7,7 @@ and the exact wasm-bindgen CLI version recorded in Cargo.lock before building.
 from __future__ import annotations
 
 import shutil
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -114,6 +115,16 @@ def main() -> int:
                 str(site / "pkg"),
                 "--out-name",
                 "aihistory",
+            )
+            # One content-derived revision keeps HTML, generated bindings, WASM
+            # and CSS together when returning visitors still have cached assets.
+            revision = hashlib.sha256()
+            for name in ("style.css", "pkg/aihistory.js", "pkg/aihistory_bg.wasm"):
+                revision.update((site / name).read_bytes())
+            index = site / "index.html"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace("__BUILD_ID__", revision.hexdigest()[:16]),
+                encoding="utf-8", newline="\n",
             )
             (site / ".nojekyll").touch()
             check_output(site)

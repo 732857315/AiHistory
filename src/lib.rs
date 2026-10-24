@@ -6,6 +6,8 @@ mod app;
 #[cfg(target_arch = "wasm32")]
 mod audio;
 #[cfg(target_arch = "wasm32")]
+mod cosmos;
+#[cfg(target_arch = "wasm32")]
 mod scene;
 
 pub const LANGUAGES: [&str; 4] = ["zh", "en", "ja", "es"];

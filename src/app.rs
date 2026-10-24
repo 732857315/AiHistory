@@ -201,20 +201,23 @@ pub fn start() -> Result<(), JsValue> {
       <div class="page-wrap" id="top">
         <header class="site-header">
           <a class="brand" href="#top" aria-label="AiHistory"><span class="brand-symbol">✳</span><span>AI<span class="brand-light">HISTORY</span><small id="brand-subtitle"></small></span></a>
-          <nav class="header-nav" aria-label="Navigation"><a href="#timeline" id="nav-timeline"></a><a href="#atlas" id="nav-atlas"></a></nav>
+          <nav class="header-nav" aria-label="Navigation"><a href="#timeline" id="nav-timeline"></a><a href="#archive-panel" data-action="archive" id="nav-atlas"></a></nav>
           <div class="header-tools"><button id="text-size" data-action="large" class="icon-button" aria-pressed="false">A<span class="small-plus">+</span></button><label class="language-wrap"><span aria-hidden="true">◎</span><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label><a class="github-link" href="https://github.com/732857315/AiHistory" target="_blank" rel="noopener noreferrer" aria-label="GitHub">GitHub ↗</a></div>
         </header>
         <main>
-          <section class="intro"><div><p class="eyebrow"><span class="tiny-star">✳</span> <span id="eyebrow"></span></p><h1 id="hero-title"></h1></div><div class="intro-note"><span class="note-line"></span><p id="hero-description"></p><span class="journey-meta" id="journey-meta"></span></div></section>
+          <section class="intro"><h1 id="hero-title"></h1><p id="hero-description"></p><span class="journey-meta" id="journey-meta"></span><span class="sr-only" id="eyebrow"></span></section>
           <section id="experience" class="experience" aria-label="Interactive history">
             <div class="stage-column"><div id="stage-shell" class="stage-shell"><div class="stage-strip"><span><span class="live-dot"></span><span id="stage-label"></span></span><span id="stage-date"></span></div>
-              <div class="canvas-wrap"><canvas id="film" width="1200" height="675" role="img" aria-label="Animated history" data-time="0" data-playing="false"></canvas><div class="canvas-corner" aria-hidden="true">+<span>+</span></div><div class="scene-caption"><span id="scene-kicker"></span><strong id="scene-caption"></strong></div><button id="audio-gate" class="audio-gate" data-action="unlock"><span aria-hidden="true">♫</span> <span id="audio-gate-label"></span><span aria-hidden="true">↗</span></button></div>
+              <div class="canvas-wrap"><canvas id="film" width="1200" height="675" role="img" aria-label="Animated history" data-time="0" data-playing="false"></canvas><div class="scene-copy"><p id="scene-kicker"></p><h2 id="scene-caption"></h2><p id="scene-summary"></p><button id="scene-explore" class="scene-explore" data-action="inspect"></button></div><div class="scene-foot"><span class="scene-index" id="scene-index"></span><span class="scene-ability" id="scene-ability"></span></div><div class="race-hud" id="race-hud" hidden><span id="race-hud-label"></span><strong id="race-hud-track"></strong><button data-action="inspect" id="race-hud-link"></button></div><button id="audio-gate" class="audio-gate" data-action="unlock"><span aria-hidden="true">♫</span> <span id="audio-gate-label"></span><span aria-hidden="true">↗</span></button></div>
               <div class="transport"><div class="scrubber"><label for="progress" class="sr-only" id="progress-label"></label><input type="range" id="progress" min="0" max="360" step="0.1" value="0"><span id="time-display">0:00</span></div><div class="transport-row"><div class="transport-buttons"><button id="play-toggle" data-action="play" class="play-button"></button><button data-action="restart" id="restart" class="transport-icon">↺</button><button data-action="sound" id="sound-toggle" class="transport-icon" aria-pressed="true">♫</button><button data-action="narration" id="narration-toggle" class="voice-button" aria-pressed="false"></button></div><div class="transport-options"><label><span class="sr-only" id="speed-label"></span><select id="speed" aria-label="Speed"><option value="0.65">0.65×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button data-action="motion" id="motion-toggle" class="transport-icon" aria-pressed="false">◌</button><button data-action="fullscreen" id="fullscreen" class="transport-icon">⛶</button></div></div></div>
             </div><p id="transport-note" class="transport-note"></p></div>
-            <aside class="story-panel" id="story-panel"><div class="panel-top"><span class="eyebrow" id="story-label"></span><span class="story-number" id="story-number"></span></div><h2 id="story-title"></h2><p id="story-summary" class="story-summary"></p><div class="reading-switch"><button id="mode-easy" data-action="easy" aria-pressed="true"></button><button id="mode-deep" data-action="deep" aria-pressed="false"></button></div><div id="story-detail"></div><div id="capability-box" class="capability-box"><span id="capability-label" class="micro-label"></span><p id="capability-text"></p><div class="capability-rule"></div><span id="limit-label" class="micro-label"></span><p id="limit-text"></p></div><div id="ranking-box" hidden><div class="ranking-header"><label for="benchmark" id="benchmark-label"></label><select id="benchmark"><option value="auto">Auto</option><option value="0">MMLU · 5-shot</option><option value="1">MMLU · CoT</option><option value="2">AdvancedIF / 2026 snapshot</option></select></div><p id="active-track" class="track-note"></p><div id="leaderboard"></div><p id="rank-note" class="rank-note"></p></div><a id="story-source" class="source-link" target="_blank" rel="noopener noreferrer"></a><button class="jump-button" id="jump-race" data-action="race"></button></aside>
           </section>
           <section class="timeline-section" id="timeline"><div class="section-heading"><div><p class="eyebrow" id="timeline-eyebrow"></p><h2 id="timeline-title"></h2></div><p id="timeline-description"></p></div><div class="timeline-track" id="timeline-list"></div></section>
-          <section class="atlas-section" id="atlas"><div class="section-heading"><div><p class="eyebrow" id="atlas-eyebrow"></p><h2 id="atlas-title"></h2></div><label class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" autocomplete="off"><span id="result-count"></span></label></div><p class="atlas-description" id="atlas-description"></p><div class="model-grid" id="model-grid"></div><details class="methodology" id="methodology"><summary id="methodology-label"></summary><p id="methodology-text"></p><p id="methodology-score"></p><a href="https://github.com/732857315/AiHistory/tree/main/sources" target="_blank" rel="noopener noreferrer" id="methodology-source"></a></details></section>
+          <details class="insight-section" id="insight-panel"><summary><span id="insight-label"></span><span class="details-hint" id="insight-hint"></span><span class="expand-symbol" aria-hidden="true">+</span></summary>
+            <aside class="story-panel" id="story-panel"><div class="story-reading"><div class="panel-top"><span class="eyebrow" id="story-label"></span><span class="story-number" id="story-number"></span></div><h2 id="story-title"></h2><p id="story-summary" class="story-summary"></p><div class="reading-switch"><button id="mode-easy" data-action="easy" aria-pressed="true"></button><button id="mode-deep" data-action="deep" aria-pressed="false"></button></div><div id="story-detail"></div><a id="story-source" class="source-link" target="_blank" rel="noopener noreferrer"></a><button class="jump-button" id="jump-race" data-action="race"></button></div><div class="story-evidence"><div id="capability-box" class="capability-box"><span id="capability-label" class="micro-label"></span><p id="capability-text"></p><div class="capability-rule"></div><span id="limit-label" class="micro-label"></span><p id="limit-text"></p></div><div id="ranking-box" hidden><div class="ranking-header"><label for="benchmark" id="benchmark-label"></label><select id="benchmark"><option value="auto">Auto</option><option value="0">MMLU · 5-shot</option><option value="1">MMLU · CoT</option><option value="2">AdvancedIF / 2026 snapshot</option></select></div><p id="active-track" class="track-note"></p><div id="leaderboard"></div><p id="rank-note" class="rank-note"></p></div></div></aside>
+          </details>
+          <details class="archive-section" id="archive-panel"><summary id="archive-toggle"><span id="archive-label"></span><span class="details-hint" id="archive-hint"></span><span class="expand-symbol" aria-hidden="true">+</span></summary>
+          <section class="atlas-section" id="atlas"><div class="section-heading"><div><p class="eyebrow" id="atlas-eyebrow"></p><h2 id="atlas-title"></h2></div><label class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" autocomplete="off"><span id="result-count"></span></label></div><p class="atlas-description" id="atlas-description"></p><div class="model-grid" id="model-grid"></div><details class="methodology" id="methodology"><summary id="methodology-label"></summary><p id="methodology-text"></p><p id="methodology-score"></p><a href="https://github.com/732857315/AiHistory/tree/main/sources" target="_blank" rel="noopener noreferrer" id="methodology-source"></a></details></section></details>
         </main><footer><a class="footer-brand" href="https://risc.ink/">risc.ink ↗</a><p id="footer-text"></p><a href="https://github.com/732857315/AiHistory/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT · 732857315</a></footer>
       </div>"##);
     let hash = window().location().hash().unwrap_or_default();
@@ -242,6 +245,69 @@ pub fn start() -> Result<(), JsValue> {
 fn localize(state: &State) {
     let l = state.lang;
     let strings = [
+        (
+            "scene-explore",
+            [
+                "这个瞬间，改变了什么",
+                "Discover what changed",
+                "何が変わったのか",
+                "Descubre qué cambió",
+            ],
+        ),
+        (
+            "insight-label",
+            [
+                "走近这一刻",
+                "Inside this moment",
+                "この瞬間を知る",
+                "Dentro de este momento",
+            ],
+        ),
+        (
+            "insight-hint",
+            [
+                "能力、原理与历史出处",
+                "Ideas, abilities & sources",
+                "仕組み・能力・出典",
+                "Ideas, capacidades y fuentes",
+            ],
+        ),
+        (
+            "archive-label",
+            [
+                "打开模型档案",
+                "Open the model archive",
+                "モデル資料を開く",
+                "Abrir el archivo de modelos",
+            ],
+        ),
+        (
+            "archive-hint",
+            [
+                "20 个模型 · 按登场时间探索",
+                "20 models · explore their arrivals",
+                "20モデル・登場の時点へ",
+                "20 modelos · sus primeras apariciones",
+            ],
+        ),
+        (
+            "race-hud-label",
+            [
+                "同一指标 · 局部放大比较",
+                "SAME BENCHMARK · FOCUSED COMPARISON",
+                "同じ指標・拡大比較",
+                "MISMO INDICADOR · VISTA AMPLIADA",
+            ],
+        ),
+        (
+            "race-hud-link",
+            [
+                "查看成绩与依据 ↗",
+                "Results & sources ↗",
+                "成績と出典 ↗",
+                "Resultados y fuentes ↗",
+            ],
+        ),
         (
             "skip-label",
             [
@@ -280,10 +346,10 @@ fn localize(state: &State) {
         (
             "hero-title",
             [
-                "人类的好奇心，\n从未停止奔跑。",
-                "Curiosity never\nstood still.",
-                "好奇心は、\n走り続ける。",
-                "La curiosidad\nnunca se detuvo.",
+                "从第一件工具，到智能的星河。",
+                "From the first tool to a galaxy of minds.",
+                "最初の道具から、知能の星河へ。",
+                "De la primera herramienta a una galaxia de mentes.",
             ],
         ),
         (
@@ -422,8 +488,8 @@ fn localize(state: &State) {
         (
             "atlas-description",
             [
-                "按发布时间整理的精选模型。点击卡片进入它登场的时刻；评测成绩与来源在侧栏展开。",
-                "Selected models, in release order. Select a card to visit its arrival; inspect published results and sources in the side panel.",
+                "按发布时间整理的精选模型。选择模型，回到它登场的时刻。",
+                "Selected models, in release order. Select a model to visit its arrival and explore its sources.",
                 "公開順に並べた主要モデル。カードを選ぶと登場時点へ移動し、成績と出典を確認できます。",
                 "Modelos seleccionados por fecha de lanzamiento. Elige una tarjeta para viajar a su llegada y consultar resultados y fuentes.",
             ],
@@ -689,6 +755,11 @@ fn render_controls(state: &State) {
             clock_label(total_duration())
         ),
     );
+    attr(
+        "progress",
+        "style",
+        &format!("--progress:{:.2}%", state.time / total_duration() * 100.0),
+    );
 }
 
 fn render_story(state: &State) {
@@ -722,6 +793,12 @@ fn render_story(state: &State) {
     hidden("ranking-box", historical.is_some());
     hidden("jump-race", historical.is_none());
     hidden("story-detail", !state.deep);
+    hidden("race-hud", historical.is_some());
+    attr(
+        "stage-shell",
+        "data-visual",
+        &historical.map_or_else(|| "cosmos".to_owned(), |i| HISTORY[i].visual.to_string()),
+    );
     attr(
         "stage-shell",
         "class",
@@ -736,6 +813,17 @@ fn render_story(state: &State) {
         text("stage-date", h.date_label[l]);
         text("scene-kicker", h.date_label[l]);
         text("scene-caption", h.title[l]);
+        if l == 0
+            && let Some((head, tail)) = h.title[l].split_once('，')
+        {
+            element("scene-caption").set_inner_html(&format!(
+                "<span class=title-phrase>{}，</span><span class=title-phrase>{}</span>",
+                escape_html(head),
+                escape_html(tail)
+            ));
+        }
+        text("scene-ability", h.capability[l]);
+        text("scene-index", &format!("{:02} — 16", index + 1));
         text(
             "story-number",
             &format!("{:02} / {:02}", index + 1, HISTORY.len()),
@@ -795,6 +883,38 @@ fn render_story(state: &State) {
         text("story-number", &format!("{available} / {}", MODELS.len()));
         if let Some(i) = current_model(state) {
             let m = &MODELS[i];
+            text("scene-caption", m.name);
+            text(
+                "scene-kicker",
+                &format!(
+                    "{} / {}",
+                    if state.time >= history_duration() + RACE_SECONDS
+                        && state.selected_model.is_none()
+                    {
+                        tr(
+                            l,
+                            [
+                                "当前赛道领先",
+                                "TRACK LEADER",
+                                "この指標の首位",
+                                "LÍDER DEL INDICADOR",
+                            ],
+                        )
+                    } else {
+                        tr(
+                            l,
+                            ["模型登场", "MODEL ARRIVAL", "モデル登場", "NUEVO MODELO"],
+                        )
+                    },
+                    if state.time >= history_duration() + RACE_SECONDS
+                        && state.selected_model.is_none()
+                    {
+                        SNAPSHOT_DATE
+                    } else {
+                        m.released
+                    }
+                ),
+            );
             text("story-title", m.name);
             text("story-summary", m.summary[l]);
             let score_available = m.score.is_some() && date_value(m.reported) <= date;
@@ -925,6 +1045,34 @@ fn render_story(state: &State) {
             ),
         );
     }
+    text(
+        "scene-summary",
+        &element("story-summary").text_content().unwrap_or_default(),
+    );
+    if historical.is_none() {
+        let track = track_index(state);
+        text(
+            "race-hud-track",
+            match track {
+                0 => "MMLU / 5-shot",
+                1 => "MMLU / 0-shot CoT",
+                _ => "AdvancedIF / 2026-10-24",
+            },
+        );
+        text("scene-index", &format!("2017 — {}", race_end().floor()));
+        text(
+            "scene-ability",
+            tr(
+                l,
+                [
+                    "星轨向前，能力边界不断延伸",
+                    "New arrivals, new possibilities",
+                    "新しい登場が、可能性を広げる",
+                    "Nuevas llegadas, nuevas posibilidades",
+                ],
+            ),
+        );
+    }
     for i in 0..HISTORY.len() {
         if let Some(stop) = document().get_element_by_id(&format!("event-{i}")) {
             let _ = stop.set_attribute(
@@ -946,6 +1094,18 @@ fn render_story(state: &State) {
                 "false"
             },
         );
+    }
+    let current = historical.map_or_else(|| "race".to_owned(), |i| i.to_string());
+    let timeline = element("timeline-list");
+    if timeline.get_attribute("data-current").as_deref() != Some(&current) {
+        let _ = timeline.set_attribute("data-current", &current);
+        let stop = element(&format!("event-{current}")).unchecked_into::<web_sys::HtmlElement>();
+        let left = stop.offset_left()
+            - timeline
+                .unchecked_ref::<web_sys::HtmlElement>()
+                .offset_left();
+        timeline
+            .set_scroll_left((left - timeline.client_width() / 2 + stop.client_width() / 2).max(0));
     }
 }
 
@@ -1199,6 +1359,16 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
         {
             let mut s = state.borrow_mut();
             match action.as_str() {
+                "inspect" => {
+                    pause(&mut s);
+                    s.deep = true;
+                    attr("insight-panel", "open", "");
+                    element("insight-panel").scroll_into_view();
+                }
+                "archive" => {
+                    pause(&mut s);
+                    attr("archive-panel", "open", "");
+                }
                 "play" => {
                     if s.playing {
                         pause(&mut s);
@@ -1275,6 +1445,7 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
                         s.selected_model = Some(i);
                         s.deep = true;
                         pause(&mut s);
+                        attr("insight-panel", "open", "");
                     }
                 }
                 "visit-model" => {
@@ -1283,6 +1454,7 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
                         s.selected_model = Some(i);
                         s.deep = true;
                         pause(&mut s);
+                        attr("insight-panel", "open", "");
                         element("experience").scroll_into_view();
                     }
                 }
@@ -1432,10 +1604,23 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
             render_controls(&s);
         }
     })?;
+    for id in ["insight-panel", "archive-panel"] {
+        let state = shared.clone();
+        listen(element(id).as_ref(), "toggle", move |_| {
+            if element(id).has_attribute("open") {
+                let mut s = state.borrow_mut();
+                pause(&mut s);
+                render_controls(&s);
+            }
+        })?;
+    }
     Ok(())
 }
 
 fn start_frames(state: Shared, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    let canvas = context
+        .canvas()
+        .ok_or_else(|| JsValue::from_str("Canvas unavailable"))?;
     let callback: FrameCallback = Rc::new(RefCell::new(None));
     let next = callback.clone();
     *callback.borrow_mut() = Some(Closure::wrap(Box::new(move |now: f64| {
@@ -1586,8 +1771,19 @@ fn start_frames(state: Shared, context: CanvasRenderingContext2d) -> Result<(), 
             } else {
                 s.time
             };
+            let compact = early.is_none()
+                && window()
+                    .inner_width()
+                    .ok()
+                    .and_then(|w| w.as_f64())
+                    .is_some_and(|w| w <= 760.0);
+            let (width, height) = if compact { (600, 500) } else { (1200, 675) };
+            if canvas.width() != width || canvas.height() != height {
+                canvas.set_width(width);
+                canvas.set_height(height);
+            }
             let draw_signature = format!(
-                "{early:?}-{:x}-{track}-{visible:?}-{ranked:?}-{}-{:?}",
+                "{early:?}-{compact}-{:x}-{track}-{visible:?}-{ranked:?}-{}-{:?}",
                 visual_time.to_bits(),
                 s.lang,
                 racers
@@ -1596,12 +1792,18 @@ fn start_frames(state: Shared, context: CanvasRenderingContext2d) -> Result<(), 
                     .collect::<Vec<_>>()
             );
             if draw_signature != s.draw_signature {
-                let _ = scene::draw(
-                    &context,
-                    visual_time,
-                    &racers,
-                    early.map(|i| HISTORY[i].visual),
-                );
+                if let Some(i) = early {
+                    let local = if s.reduced {
+                        1.0
+                    } else {
+                        (s.time - history_start(i)) / HISTORY[i].duration
+                    };
+                    let _ = scene::draw_history(&context, visual_time, HISTORY[i].visual, local);
+                } else if compact {
+                    let _ = crate::cosmos::draw_compact(&context, visual_time, &racers);
+                } else {
+                    let _ = crate::cosmos::draw(&context, visual_time, &racers);
+                }
                 s.draw_signature = draw_signature;
             }
             let month = date.floor() as u32 * 12 + (date.fract() * 12.0).floor() as u32;
