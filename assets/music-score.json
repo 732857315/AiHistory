@@ -1,0 +1,552 @@
+{
+  "title": "A Small Step Through Time",
+  "copyright": "Copyright (c) 2026 732857315",
+  "license": "MIT",
+  "description": "Original runtime underscore. No borrowed recordings, samples or reference melodies. Musical sections are independent of the historical timeline.",
+  "tempo_bpm": 120,
+  "beats_per_bar": 4,
+  "duration_seconds": 96,
+  "lead_offsets_beats": [
+    0.25,
+    1.0,
+    2.25,
+    3.0
+  ],
+  "chords": {
+    "C": {
+      "pad": [
+        "C4",
+        "E4",
+        "G4"
+      ],
+      "bass": "C2"
+    },
+    "Am": {
+      "pad": [
+        "A3",
+        "C4",
+        "E4"
+      ],
+      "bass": "A2"
+    },
+    "F": {
+      "pad": [
+        "F3",
+        "A3",
+        "C4"
+      ],
+      "bass": "F2"
+    },
+    "G": {
+      "pad": [
+        "G3",
+        "B3",
+        "D4"
+      ],
+      "bass": "G2"
+    },
+    "Dm": {
+      "pad": [
+        "D4",
+        "F4",
+        "A4"
+      ],
+      "bass": "D2"
+    }
+  },
+  "sections": [
+    {
+      "bars": [
+        {
+          "chord": "C",
+          "melody": [
+            "E5",
+            null,
+            "G5",
+            "D5"
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "A4",
+            "E5",
+            null,
+            "C5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "G5",
+            "E5",
+            "C5",
+            null
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            null,
+            "G4",
+            "A4"
+          ]
+        }
+      ],
+      "section": 1
+    },
+    {
+      "bars": [
+        {
+          "chord": "C",
+          "melody": [
+            "C5",
+            "G5",
+            "E5",
+            null
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "A5",
+            "G5",
+            null,
+            "E5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "C5",
+            "D5",
+            "A4",
+            "E5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "G5",
+            null,
+            "D5",
+            "G4"
+          ]
+        }
+      ],
+      "section": 2
+    },
+    {
+      "bars": [
+        {
+          "chord": "Am",
+          "melody": [
+            "E5",
+            "A5",
+            "G5",
+            "C5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "A4",
+            "D5",
+            "E5",
+            null
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "G5",
+            "C5",
+            null,
+            "E5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            "A4",
+            "G5",
+            null
+          ]
+        }
+      ],
+      "section": 3
+    },
+    {
+      "bars": [
+        {
+          "chord": "C",
+          "melody": [
+            "G4",
+            "E5",
+            "D5",
+            "G5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "A5",
+            null,
+            "C5",
+            "E5"
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "A4",
+            "G5",
+            "E5",
+            "C5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            "G4",
+            null,
+            "D5"
+          ]
+        }
+      ],
+      "section": 4
+    },
+    {
+      "bars": [
+        {
+          "chord": "F",
+          "melody": [
+            "C5",
+            "A4",
+            null,
+            "D5"
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "E5",
+            "G5",
+            "C5",
+            null
+          ]
+        },
+        {
+          "chord": "Dm",
+          "melody": [
+            "A5",
+            "E5",
+            "D5",
+            "A4"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "G5",
+            null,
+            "D5",
+            "E5"
+          ]
+        }
+      ],
+      "section": 5
+    },
+    {
+      "bars": [
+        {
+          "chord": "Am",
+          "melody": [
+            "A4",
+            "E5",
+            "G5",
+            "A5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "E5",
+            "C5",
+            "D5",
+            null
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "G5",
+            "E5",
+            "C6",
+            "G5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            "G5",
+            "A5",
+            "D5"
+          ]
+        }
+      ],
+      "section": 6
+    },
+    {
+      "bars": [
+        {
+          "chord": "C",
+          "melody": [
+            "E5",
+            "C6",
+            "G5",
+            "D5"
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "A5",
+            "E5",
+            "C5",
+            "G5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "C6",
+            "A5",
+            null,
+            "E5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "G5",
+            "D5",
+            "A4",
+            "G5"
+          ]
+        }
+      ],
+      "section": 7
+    },
+    {
+      "bars": [
+        {
+          "chord": "F",
+          "melody": [
+            "A5",
+            "C5",
+            "E5",
+            "G5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            "G5",
+            "D6",
+            "A5"
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "C6",
+            "E5",
+            "G5",
+            null
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "E5",
+            "D5",
+            "C5",
+            "G5"
+          ]
+        }
+      ],
+      "section": 8
+    },
+    {
+      "bars": [
+        {
+          "chord": "Am",
+          "melody": [
+            "E5",
+            "G5",
+            "A4",
+            "C6"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "A5",
+            "E5",
+            "C5",
+            "D5"
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "G5",
+            null,
+            "E5",
+            "C6"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D6",
+            "A5",
+            "G5",
+            "D5"
+          ]
+        }
+      ],
+      "section": 9
+    },
+    {
+      "bars": [
+        {
+          "chord": "Dm",
+          "melody": [
+            "D5",
+            "A5",
+            "E5",
+            null
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "C6",
+            "G5",
+            "A5",
+            "E5"
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "G5",
+            "D5",
+            "C5",
+            "E5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "A4",
+            "G5",
+            null,
+            "D5"
+          ]
+        }
+      ],
+      "section": 10
+    },
+    {
+      "bars": [
+        {
+          "chord": "C",
+          "melody": [
+            "C6",
+            "E5",
+            "G5",
+            "D5"
+          ]
+        },
+        {
+          "chord": "Am",
+          "melody": [
+            "A5",
+            "C5",
+            "E5",
+            "G5"
+          ]
+        },
+        {
+          "chord": "F",
+          "melody": [
+            "A4",
+            "D5",
+            "C6",
+            "A5"
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "G5",
+            "D6",
+            "E5",
+            "D5"
+          ]
+        }
+      ],
+      "section": 11
+    },
+    {
+      "bars": [
+        {
+          "chord": "F",
+          "melody": [
+            "A5",
+            "E5",
+            "C5",
+            null
+          ]
+        },
+        {
+          "chord": "G",
+          "melody": [
+            "D5",
+            "G5",
+            null,
+            "A4"
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "E5",
+            "D5",
+            "G4",
+            null
+          ]
+        },
+        {
+          "chord": "C",
+          "melody": [
+            "C5",
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "section": 12
+    }
+  ],
+  "runtime": "Rust/WASM Web Audio oscillators; no media files"
+}

@@ -1,0 +1,6 @@
+/target/
+/dist/
+/.local/
+/.aihistory-build-*/
+__pycache__/
+*.pyc

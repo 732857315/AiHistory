@@ -1,0 +1,24 @@
+[package]
+name = "aihistory"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["732857315 <732857315@qq.com>"]
+description = "A live, multilingual journey from tools to intelligence, rendered in Rust and WebAssembly"
+repository = "https://github.com/732857315/AiHistory"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "HtmlSelectElement", "HtmlCanvasElement", "CanvasRenderingContext2d", "CanvasGradient", "Node", "Event", "EventTarget", "KeyboardEvent", "Storage", "Navigator", "Location", "AudioContext", "AudioContextState", "AudioDestinationNode", "AudioNode", "AudioParam", "GainNode", "OscillatorNode", "OscillatorType", "SpeechSynthesis", "SpeechSynthesisUtterance", "SpeechSynthesisVoice", "MediaQueryList"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

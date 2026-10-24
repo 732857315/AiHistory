@@ -1,0 +1,2 @@
+# Optional browser verification; production builds use the Python standard library.
+playwright==1.64.1
