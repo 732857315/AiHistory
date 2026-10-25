@@ -26,6 +26,7 @@ struct State {
     deep: bool,
     large: bool,
     reduced: bool,
+    motion_override: bool,
     track: Option<usize>,
     query: String,
     selected_model: Option<usize>,
@@ -91,7 +92,7 @@ fn clock_label(time: f64) -> String {
 }
 fn track_index(state: &State) -> usize {
     state.track.unwrap_or_else(|| {
-        if race_date(state.time) >= date_value("2026-10-24")
+        if race_date(state.time) >= date_value(SNAPSHOT_DATE)
             && MODELS.iter().any(|m| {
                 m.protocol == TRACKS[2].1
                     && m.score.is_some()
@@ -144,18 +145,19 @@ fn coverage_note(lang: usize) -> String {
         .map(|m| m.reported)
         .max()
         .unwrap_or("—");
+    let verified = SNAPSHOT_DATE;
     match lang {
         1 => format!(
-            "Releases verified 2026-10-24. {published} historical published results through {published_date} + {observed} observed snapshots dated {observed_date}. Snapshots enter only from their observation date; no historical backfill. A curated record, not a global leaderboard."
+            "Releases verified {verified}. {published} historical published results through {published_date} + {observed} observed snapshots dated {observed_date}. Snapshots enter only from their observation date; no historical backfill. A curated record, not a global leaderboard."
         ),
         2 => format!(
-            "モデル公開日の確認：2026-10-24。公開成績{published}件（最終{published_date}）＋参照スナップショット{observed}件（{observed_date}）。スナップショットは参照日から表示し、過去に遡って使いません。資料の選集であり、世界総合ランキングではありません。"
+            "モデル公開日の確認：{verified}。公開成績{published}件（最終{published_date}）＋参照スナップショット{observed}件（{observed_date}）。スナップショットは参照日から表示し、過去に遡って使いません。資料の選集であり、世界総合ランキングではありません。"
         ),
         3 => format!(
-            "Lanzamientos verificados el 2026-10-24. {published} resultados históricos publicados hasta {published_date} + {observed} instantáneas consultadas el {observed_date}. Las instantáneas solo entran desde su consulta, sin aplicarse al pasado. Una selección, no una clasificación mundial."
+            "Lanzamientos verificados el {verified}. {published} resultados históricos publicados hasta {published_date} + {observed} instantáneas consultadas el {observed_date}. Las instantáneas solo entran desde su consulta, sin aplicarse al pasado. Una selección, no una clasificación mundial."
         ),
         _ => format!(
-            "模型发布核验：2026-10-24。{published} 项历史公布成绩（截止 {published_date}）＋{observed} 项查阅快照（{observed_date}）。快照只从查阅日起展示，不回填历史；这是资料选集，不是全球总榜。"
+            "模型发布核验：{verified}。{published} 项历史公布成绩（截止 {published_date}）＋{observed} 项查阅快照（{observed_date}）。快照只从查阅日起展示，不回填历史；这是资料选集，不是全球总榜。"
         ),
     }
 }
@@ -180,6 +182,7 @@ pub fn start() -> Result<(), JsValue> {
         deep: false,
         large: preference("aihistory.large").is_some_and(|v| v == "true"),
         reduced,
+        motion_override: false,
         track: None,
         query: String::new(),
         selected_model: None,
@@ -279,15 +282,6 @@ fn localize(state: &State) {
                 "Open the model archive",
                 "モデル資料を開く",
                 "Abrir el archivo de modelos",
-            ],
-        ),
-        (
-            "archive-hint",
-            [
-                "20 个模型 · 按登场时间探索",
-                "20 models · explore their arrivals",
-                "20モデル・登場の時点へ",
-                "20 modelos · sus primeras apariciones",
             ],
         ),
         (
@@ -543,6 +537,33 @@ fn localize(state: &State) {
     for (id, values) in strings {
         text(id, tr(l, values));
     }
+    // Counts follow the data, so adding a model or a milestone cannot leave the
+    // interface claiming a stale total.
+    let models = MODELS.len();
+    let moments = HISTORY.len();
+    text(
+        "archive-hint",
+        &match l {
+            1 => format!("{models} models · explore their arrivals"),
+            2 => format!("{models}モデル・登場の時点へ"),
+            3 => format!("{models} modelos · sus primeras apariciones"),
+            _ => format!("{models} 个模型 · 按登场时间探索"),
+        },
+    );
+    text(
+        "journey-meta",
+        &format!(
+            "{}  /  {}  /  {}",
+            match l {
+                1 => format!("{moments} historical moments"),
+                2 => format!("{moments}の歴史的瞬間"),
+                3 => format!("{moments} momentos históricos"),
+                _ => format!("{moments} 个历史瞬间"),
+            },
+            tr(l, ["4 种语言", "4 languages", "4言語", "4 idiomas"]),
+            clock_label(total_duration())
+        ),
+    );
     let methodology = element("methodology-score")
         .text_content()
         .unwrap_or_default();
@@ -566,6 +587,30 @@ fn localize(state: &State) {
     element("language")
         .unchecked_into::<HtmlSelectElement>()
         .set_value(LANGUAGES[l]);
+    // The option labels name each language in its own script, so the control
+    // itself needs a localized accessible name instead of a fixed English one.
+    for (id, labels) in [
+        (
+            "language",
+            [
+                "界面语言",
+                "Interface language",
+                "表示言語",
+                "Idioma de la interfaz",
+            ],
+        ),
+        (
+            "speed",
+            [
+                "播放速度",
+                "Playback speed",
+                "再生速度",
+                "Velocidad de reproducción",
+            ],
+        ),
+    ] {
+        attr(id, "aria-label", tr(l, labels));
+    }
     attr(
         "search",
         "placeholder",
@@ -629,23 +674,6 @@ fn localize(state: &State) {
         ),
     );
     attr("progress", "max", &total_duration().to_string());
-    text(
-        "journey-meta",
-        &format!(
-            "{}  /  {}  /  {}",
-            tr(
-                l,
-                [
-                    "16 个历史瞬间",
-                    "16 historical moments",
-                    "16の歴史的瞬間",
-                    "16 momentos históricos"
-                ]
-            ),
-            tr(l, ["4 种语言", "4 languages", "4言語", "4 idiomas"]),
-            clock_label(total_duration())
-        ),
-    );
     text(
         "transport-note",
         tr(
@@ -823,7 +851,10 @@ fn render_story(state: &State) {
             ));
         }
         text("scene-ability", h.capability[l]);
-        text("scene-index", &format!("{:02} — 16", index + 1));
+        text(
+            "scene-index",
+            &format!("{:02} — {:02}", index + 1, HISTORY.len()),
+        );
         text(
             "story-number",
             &format!("{:02} / {:02}", index + 1, HISTORY.len()),
@@ -1053,13 +1084,16 @@ fn render_story(state: &State) {
         let track = track_index(state);
         text(
             "race-hud-track",
-            match track {
-                0 => "MMLU / 5-shot",
-                1 => "MMLU / 0-shot CoT",
-                _ => "AdvancedIF / 2026-10-24",
+            &match track {
+                0 => "MMLU / 5-shot".to_owned(),
+                1 => "MMLU / 0-shot CoT".to_owned(),
+                _ => format!("AdvancedIF / {SNAPSHOT_DATE}"),
             },
         );
-        text("scene-index", &format!("2017 — {}", race_end().floor()));
+        text(
+            "scene-index",
+            &format!("{} — {}", RACE_START.floor(), race_end().floor()),
+        );
         text(
             "scene-ability",
             tr(
@@ -1100,12 +1134,10 @@ fn render_story(state: &State) {
     if timeline.get_attribute("data-current").as_deref() != Some(&current) {
         let _ = timeline.set_attribute("data-current", &current);
         let stop = element(&format!("event-{current}")).unchecked_into::<web_sys::HtmlElement>();
-        let left = stop.offset_left()
-            - timeline
-                .unchecked_ref::<web_sys::HtmlElement>()
-                .offset_left();
-        timeline
-            .set_scroll_left((left - timeline.client_width() / 2 + stop.client_width() / 2).max(0));
+        // The track is the offset parent, so offset_left() is already relative to
+        // it; subtracting the track's own page offset would cancel the page gutter.
+        let centre = stop.offset_left() + stop.offset_width() / 2;
+        timeline.set_scroll_left((centre - timeline.client_width() / 2).max(0));
     }
 }
 
@@ -1123,7 +1155,7 @@ fn render_ranking(state: &State) {
         ],
     );
     let active_label = if track == 2 {
-        format!("{benchmark} · {protocol}\n{snapshot_label} · 2026-10-24")
+        format!("{benchmark} · {protocol}\n{snapshot_label} · {SNAPSHOT_DATE}")
     } else {
         format!("{benchmark} · {protocol}")
     };
@@ -1148,7 +1180,12 @@ fn render_ranking(state: &State) {
             )
         );
     }
-    element("leaderboard").set_inner_html(&html);
+    let leaderboard = element("leaderboard");
+    // Keep the existing buttons when only the inspected model has changed.
+    // Replacing them here would discard keyboard focus after activation.
+    if leaderboard.inner_html() != html {
+        leaderboard.set_inner_html(&html);
+    }
     let note = if track == 2 {
         tr(
             l,
@@ -1179,7 +1216,7 @@ fn render_timeline(state: &State) {
     for (i, h) in HISTORY.iter().enumerate() {
         html.push_str(&format!(r#"<button class="timeline-stop" id="event-{i}" data-action="seek" data-index="{i}" aria-current="false"><span class="timeline-dot"></span><strong>{}</strong><span>{}</span></button>"#, escape_html(h.date_label[l]), escape_html(h.title[l])));
     }
-    html.push_str(&format!(r#"<button class="timeline-stop race-stop" id="event-race" data-action="race" aria-current="false"><span class="timeline-dot">✦</span><strong>2017 → {:.0}</strong><span>{}</span></button>"#, race_end().floor(), tr(l, ["模型的星河", "The model galaxy", "モデルの星河", "Galaxia de modelos"])));
+    html.push_str(&format!(r#"<button class="timeline-stop race-stop" id="event-race" data-action="race" aria-current="false"><span class="timeline-dot">✦</span><strong>{:.0} → {:.0}</strong><span>{}</span></button>"#, RACE_START.floor(), race_end().floor(), tr(l, ["模型的星河", "The model galaxy", "モデルの星河", "Galaxia de modelos"])));
     element("timeline-list").set_inner_html(&html);
 }
 
@@ -1415,6 +1452,9 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
                 }
                 "motion" => {
                     s.reduced = !s.reduced;
+                    s.motion_override = true;
+                    s.needs_snap = true;
+                    s.draw_signature.clear();
                 }
                 "large" => {
                     s.large = !s.large;
@@ -1547,16 +1587,27 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
         let Ok(event) = event.dyn_into::<KeyboardEvent>() else {
             return;
         };
+        // A held Space key should toggle playback once. Leave modified keys
+        // to browser navigation and assistive technology.
+        if event.default_prevented() || event.alt_key() || event.ctrl_key() || event.meta_key() {
+            return;
+        }
         if event
             .target()
             .and_then(|t| t.dyn_into::<Element>().ok())
             .is_some_and(|e| {
+                // SUMMARY keeps its native Space/Enter disclosure behaviour;
+                // intercepting Space here would toggle playback instead.
                 matches!(
                     e.tag_name().as_str(),
-                    "INPUT" | "SELECT" | "TEXTAREA" | "BUTTON" | "A"
+                    "INPUT" | "SELECT" | "TEXTAREA" | "BUTTON" | "A" | "SUMMARY"
                 )
             })
         {
+            return;
+        }
+        if event.key() == " " && event.repeat() {
+            event.prevent_default();
             return;
         }
         let mut resume = false;
@@ -1604,6 +1655,25 @@ fn bind_events(shared: &Shared) -> Result<(), JsValue> {
             render_controls(&s);
         }
     })?;
+    if let Some(media) = window().match_media("(prefers-reduced-motion: reduce)")? {
+        let state = shared.clone();
+        let preference = media.clone();
+        listen(media.as_ref(), "change", move |_| {
+            let mut s = state.borrow_mut();
+            // The page's motion button is an explicit override for this visit.
+            // Otherwise follow live OS changes, without starting playback when
+            // the user turns the system preference back off.
+            if !s.motion_override {
+                s.reduced = preference.matches();
+                if s.reduced {
+                    pause(&mut s);
+                }
+                s.needs_snap = true;
+                s.draw_signature.clear();
+                render_controls(&s);
+            }
+        })?;
+    }
     for id in ["insight-panel", "archive-panel"] {
         let state = shared.clone();
         listen(element(id).as_ref(), "toggle", move |_| {
@@ -1727,37 +1797,14 @@ fn start_frames(state: Shared, context: CanvasRenderingContext2d) -> Result<(), 
                 }
             }
             s.needs_snap = false;
-            let organizations: Vec<String> = visible
-                .iter()
-                .map(|i| {
-                    if ranked.contains(i) {
-                        MODELS[*i].organization.to_owned()
-                    } else {
-                        format!(
-                            "{} · {}",
-                            MODELS[*i].organization,
-                            tr(
-                                s.lang,
-                                [
-                                    "本赛道未排名",
-                                    "Unranked here",
-                                    "この比較対象外",
-                                    "Sin clasificar aquí"
-                                ]
-                            )
-                        )
-                    }
-                })
-                .collect();
             let racers: Vec<scene::Racer<'_>> = visible
                 .iter()
-                .enumerate()
-                .map(|(row, i)| {
+                .map(|i| {
                     let model = &MODELS[*i];
                     let rank = ranked.iter().position(|j| j == i).map_or(0, |r| r + 1);
                     scene::Racer {
                         name: model.name,
-                        organization: &organizations[row],
+                        organization: model.organization,
                         color: model.color,
                         score: if rank > 0 { model.score } else { None },
                         position: s.positions[*i],
@@ -1783,9 +1830,8 @@ fn start_frames(state: Shared, context: CanvasRenderingContext2d) -> Result<(), 
                 canvas.set_height(height);
             }
             let draw_signature = format!(
-                "{early:?}-{compact}-{:x}-{track}-{visible:?}-{ranked:?}-{}-{:?}",
+                "{early:?}-{compact}-{:x}-{track}-{visible:?}-{ranked:?}-{:?}",
                 visual_time.to_bits(),
-                s.lang,
                 racers
                     .iter()
                     .map(|r| (r.position.to_bits(), r.appeared.to_bits()))

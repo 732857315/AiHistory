@@ -9,6 +9,17 @@ mod audio;
 mod cosmos;
 #[cfg(target_arch = "wasm32")]
 mod scene;
+#[cfg(target_arch = "wasm32")]
+pub mod animation;
+#[cfg(target_arch = "wasm32")]
+pub mod particles;
+#[cfg(target_arch = "wasm32")]
+pub mod scene_cache;
+// TODO: Re-enable after fixing text() method signatures
+// #[cfg(target_arch = "wasm32")]
+// pub mod explosive_scenes;
+// #[cfg(target_arch = "wasm32")]
+// pub mod transformer_scene;
 
 pub const LANGUAGES: [&str; 4] = ["zh", "en", "ja", "es"];
 pub const RACE_SECONDS: f64 = 180.0;

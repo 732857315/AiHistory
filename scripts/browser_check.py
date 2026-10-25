@@ -20,6 +20,7 @@ import os
 import re
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -116,12 +117,75 @@ def inspect_assets(base: str) -> None:
 
 
 def wait_for_canvas(page) -> None:
-    page.wait_for_function(
-        "() => { const c = document.querySelector('#film'); "
-        "return c instanceof HTMLCanvasElement && c.width > 0 && c.height > 0 "
-        "&& c.dataset.time !== undefined && Number.isFinite(Number(c.dataset.time)); }",
-        timeout=30_000,
-    )
+    from playwright.sync_api import expect
+
+    # Main-world wait_for_function evaluation can unlock a pending Web Audio
+    # resume through CDP's user gesture, invalidating the strict autoplay check.
+    canvas = page.locator("canvas#film")
+    expect(canvas).to_have_attribute("width", re.compile(r"^[1-9]\d*$"), timeout=30_000)
+    expect(canvas).to_have_attribute("height", re.compile(r"^[1-9]\d*$"))
+    expect(canvas).to_have_attribute("data-time", re.compile(r"^\d+(?:\.\d+)?$"))
+
+
+def check_autoplay_gate(page) -> None:
+    """Read the untouched document without granting a DevTools user gesture."""
+    session = page.context.new_cdp_session(page)
+    deadline = time.monotonic() + 30
+    try:
+        while time.monotonic() < deadline:
+            result = session.send("Runtime.evaluate", {
+                "expression": """(() => {
+                    const canvas = document.querySelector('#film');
+                    const gate = document.querySelector('#audio-gate');
+                    if (!canvas?.dataset.audioState || !gate) return null;
+                    const box = gate.getBoundingClientRect();
+                    const style = getComputedStyle(gate);
+                    return {state:canvas.dataset.audioState,
+                        active:navigator.userActivation.hasBeenActive,
+                        nativeStates:window.__aiHistoryAudioProbes.map(p => p.context.state),
+                        visible:box.width > 0 && box.height > 0
+                            && style.display !== 'none' && style.visibility !== 'hidden'};
+                })()""",
+                "returnByValue": True,
+                "userGesture": False,
+            })["result"].get("value")
+            if result is not None:
+                assert not result["active"], "Autoplay was inspected after user activation"
+                assert result["state"] == "suspended", f"Strict autoplay was not blocked: {result}"
+                assert result["nativeStates"] and all(
+                    state == "suspended" for state in result["nativeStates"]
+                ), f"Native audio context escaped the autoplay block: {result}"
+                assert result["visible"], "Blocked autoplay has no visible activation gate"
+                return
+            page.wait_for_timeout(50)
+        raise AssertionError("The untouched page did not initialize its autoplay gate")
+    finally:
+        session.detach()
+
+
+def check_load_failures(browser, base: str) -> list[str]:
+    """Exercise both loader stages, then verify that a refresh can recover."""
+    from playwright.sync_api import expect
+
+    checked = []
+    for asset in ("pkg/aihistory.js", "pkg/aihistory_bg.wasm"):
+        context = browser.new_context()
+        pattern = f"**/{asset}*"
+        context.route(pattern, lambda route: route.abort())
+        page = context.new_page()
+        page.goto(base, wait_until="domcontentloaded")
+        error = page.locator("#load-error")
+        expect(error).to_be_visible()
+        expect(error).to_have_attribute("role", "alert")
+        expect(error).to_contain_text("Please refresh and try again.")
+        expect(page.locator("#film")).to_have_count(0)
+        context.unroute(pattern)
+        page.reload(wait_until="domcontentloaded")
+        wait_for_canvas(page)
+        expect(error).to_have_count(0)
+        context.close()
+        checked.append(asset)
+    return checked
 
 
 def check_playback(page) -> None:
@@ -270,6 +334,66 @@ def pause_and_check(page) -> None:
     )
 
 
+def check_keyboard_transport(page) -> None:
+    """Repeated keydown events from one held key must toggle only once."""
+    from playwright.sync_api import expect
+
+    pause_and_check(page)
+    page.locator("#film").click(position={"x": 20, "y": 50})
+    page.keyboard.down("Space")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "true")
+    scroll = page.evaluate("scrollY")
+    page.keyboard.down("Space")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "true")
+    page.keyboard.down("Space")
+    page.keyboard.up("Space")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "true")
+    assert page.evaluate("scrollY") == scroll, "Held Space unexpectedly scrolled the page"
+    page.keyboard.press("Space")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "false")
+
+
+def check_live_motion_preference(page) -> None:
+    from playwright.sync_api import expect
+
+    page.locator("#play-toggle").click()
+    expect(page.locator("#film")).to_have_attribute("data-playing", "true")
+    page.emulate_media(reduced_motion="reduce")
+    expect(page.locator("#motion-toggle")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "false")
+    pause_and_check(page)
+    page.emulate_media(reduced_motion="no-preference")
+    expect(page.locator("#motion-toggle")).to_have_attribute("aria-pressed", "false")
+    expect(page.locator("#film")).to_have_attribute("data-playing", "false")
+    # Explicit page settings take precedence over later OS preference changes.
+    page.locator("#motion-toggle").click()
+    page.emulate_media(reduced_motion="reduce")
+    page.emulate_media(reduced_motion="no-preference")
+    page.wait_for_timeout(150)
+    expect(page.locator("#motion-toggle")).to_have_attribute("aria-pressed", "true")
+    page.locator("#motion-toggle").click()
+
+
+def check_canvas_language_neutrality(page) -> None:
+    from playwright.sync_api import expect
+
+    pause_and_check(page)
+    canvas = page.locator("#film")
+    frame = canvas.evaluate("node => node.toDataURL('image/png')")
+    time = canvas.get_attribute("data-time")
+    language = page.locator("#language")
+    original = language.input_value()
+    for code in ("en", "ja", "es", "zh"):
+        language.select_option(code)
+        expect(page.locator("html")).to_have_attribute("lang", re.compile(rf"^{code}(?:-|$)"))
+        page.wait_for_timeout(120)
+        assert canvas.get_attribute("data-time") == time, "Language changed paused time"
+        assert canvas.evaluate("node => node.toDataURL('image/png')") == frame, (
+            f"Language {code} changed the language-neutral canvas"
+        )
+    language.select_option(original)
+
+
 def seek_final_scene(page) -> float:
     """Use real keyboard controls on the range input, ending two seconds early."""
     from playwright.sync_api import expect
@@ -344,12 +468,19 @@ def verify(base: str, browser_path: str | None) -> dict:
             headless=True,
             args=["--autoplay-policy=document-user-activation-required"],
         )
+        load_failures = check_load_failures(browser, base)
         context = browser.new_context(viewport={"width": 1440, "height": 900}, locale="zh-CN")
         context.add_init_script(AUDIO_PROBE_SCRIPT)
         page = context.new_page()
         watch(page)
         response = page.goto(base, wait_until="domcontentloaded")
         assert response and response.status == 200
+        # Locator assertions can grant a CDP user gesture before asynchronous
+        # initialization finishes. Observe strict autoplay before any of them.
+        check_autoplay_gate(page)
+        page.locator("#audio-gate").click()
+        expect(page.locator("#film")).to_have_attribute("data-audio-state", "running")
+        expect(page.locator("#audio-gate")).to_be_hidden()
         language = page.locator("#language")
         expect(language).to_be_visible()
         expect(language).to_have_value("zh")
@@ -364,12 +495,6 @@ def verify(base: str, browser_path: str | None) -> dict:
                 assert panel.get_attribute("open") is None, f"Initial view must keep {selector} folded"
         expect(page.locator("video, audio")).to_have_count(0)
         expect(page.locator("#sound-toggle")).to_have_attribute("aria-pressed", "true")
-        # A strict autoplay policy must leave a visible, working activation gate.
-        expect(page.locator("#film")).to_have_attribute("data-audio-state", "suspended")
-        expect(page.locator("#audio-gate")).to_be_visible()
-        page.locator("#audio-gate").click()
-        expect(page.locator("#film")).to_have_attribute("data-audio-state", "running")
-        expect(page.locator("#audio-gate")).to_be_hidden()
         check_playback(page)
         page.wait_for_function(
             "() => { const peak = window.__aiHistoryAudioPeak(); "
@@ -411,6 +536,8 @@ def verify(base: str, browser_path: str | None) -> dict:
         assert float(page.locator("#film").get_attribute("data-time")) == 0.0
         screenshot_scene(page, output, "desktop-start")
         layouts["desktop-start"] = check_stage_layout(page, "desktop start")
+        check_keyboard_transport(page)
+        check_live_motion_preference(page)
 
         # Seek through a real timeline control before changing language. This
         # makes playback-reset bugs observable instead of only checking t=0.
@@ -431,6 +558,17 @@ def verify(base: str, browser_path: str | None) -> dict:
             expect(page.locator("#film")).to_have_attribute("data-playing", "true")
             check_playback(page)
             check_no_overflow(page)
+
+        # Space on a disclosure uses its native behaviour, without toggling
+        # the film through the document-wide playback shortcut.
+        set_details_open(page, "#insight-panel", False)
+        summary = page.locator("#insight-panel > summary")
+        summary.press("Space")
+        expect(page.locator("#insight-panel")).to_have_attribute("open", "")
+        expect(page.locator("#film")).to_have_attribute("data-playing", "false")
+        summary.press("Space")
+        expect(page.locator("#insight-panel")).not_to_have_attribute("open", "")
+        expect(page.locator("#film")).to_have_attribute("data-playing", "false")
 
         # Deep reading pauses the film, giving readers time to inspect sources.
         open_insight(page)
@@ -461,7 +599,11 @@ def verify(base: str, browser_path: str | None) -> dict:
             (2, "desktop-theatre"),
             (3, "desktop-automata"),
             (4, "desktop-writer"),
+            (7, "desktop-tape"),
             (8, "desktop-neuron"),
+            (9, "desktop-dartmouth"),
+            (11, "desktop-backprop"),
+            (13, "desktop-chess"),
             (15, "desktop-transformer"),
         ):
             choose_history(page, index)
@@ -472,6 +614,13 @@ def verify(base: str, browser_path: str | None) -> dict:
         # The atlas filters models, and its cards seek to actual release dates.
         open_archive(page)
         search = page.locator("#search")
+        page.locator("#archive-toggle").press("Tab")
+        expect(search).to_be_focused()
+        assert search.evaluate(
+            "node => { const style = getComputedStyle(node); "
+            "return node.matches(':focus-visible') && style.outlineStyle !== 'none' "
+            "&& Number.parseFloat(style.outlineWidth) >= 2; }"
+        ), "Keyboard focus on the archive search has no visible outline"
         search.fill("DeepSeek-R1")
         expect(model_cards).to_have_count(1)
         expect(page.locator("#result-count")).to_have_text("1")
@@ -502,6 +651,8 @@ def verify(base: str, browser_path: str | None) -> dict:
         expect(page.locator("#active-track")).to_contain_text("2026-10-24")
         expect(page.locator("#leaderboard .rank-row")).to_have_count(0)
         expect(page.locator("#leaderboard .rank-empty")).to_be_visible()
+        # An unranked model used to paint a translated label into the canvas.
+        check_canvas_language_neutrality(page)
         open_archive(page)
         search.fill("")
         expect(model_cards).to_have_count(20)
@@ -536,6 +687,12 @@ def verify(base: str, browser_path: str | None) -> dict:
         assert names_latest == ["Gemini 3.1 Pro Preview", "Claude Opus 5.5", "GPT-6.1 Sol"], names_latest
         assert scores_latest == ["86.7", "82.8", "82.4"], scores_latest
         assert not set(names_latest) & set(names_zero + names_five), "Different benchmarks were merged"
+        first_rank = page.locator("#leaderboard .rank-row").first
+        first_rank.press("Enter")
+        expect(page.locator("#story-title")).to_have_text(names_latest[0])
+        expect(first_rank).to_be_focused()
+        page.wait_for_timeout(250)
+        expect(first_rank).to_be_focused()
         benchmark.select_option("auto")
         expect(benchmark).to_have_value("auto")
         benchmark.select_option("2")
@@ -570,6 +727,13 @@ def verify(base: str, browser_path: str | None) -> dict:
         expect(mobile.locator("#stage-date")).to_contain_text("1989")
         screenshot_scene(mobile, output, "mobile-cnn")
         layouts["mobile-cnn"] = check_stage_layout(mobile, "mobile CNN")
+        for index, name in (
+            (7, "mobile-tape"), (9, "mobile-dartmouth"),
+            (11, "mobile-backprop"), (13, "mobile-chess"),
+        ):
+            choose_history(mobile, index)
+            pause_and_check(mobile)
+            screenshot_scene(mobile, output, name)
         open_insight(mobile)
         mobile.locator("#jump-race").click()
         expect(mobile.locator("#event-race")).to_have_attribute("aria-current", "step")
@@ -614,6 +778,9 @@ def verify(base: str, browser_path: str | None) -> dict:
         "languages": ["zh", "en", "ja", "es"], "ranking_protocols_checked": 3,
         "audio_peak_unmuted": audible_peak, "muted_audio_clock_advance": muted_clock_advance,
         "reduced_motion_starts_paused": True, "paused_canvas_stays_still": True,
+        "load_failure_recovery_checked": load_failures, "search_keyboard_focus_visible": True,
+        "held_space_toggles_once": True, "live_motion_preference_checked": True,
+        "ranking_keyboard_focus_preserved": True, "canvas_language_neutral": True,
         "layouts_checked": list(layouts), "screenshots": str(output),
     }
 

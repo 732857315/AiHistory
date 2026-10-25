@@ -1,20 +1,27 @@
 //! Deterministic live engravings and a score-driven galaxy, drawn by Rust/WASM.
 //! There are no images, encoded media, frame sequences, or random state.
-use std::f64::consts::{PI, TAU};
-use wasm_bindgen::JsValue;
-use web_sys::CanvasRenderingContext2d;
+use std::{
+    cell::RefCell,
+    f64::consts::{PI, TAU},
+};
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 type Point = (f64, f64);
 type Curve = [Point; 4];
-const PAPER: &str = "#f1e8d6";
-const INK: &str = "#302d28";
-const PRINT: &str = "#786d5c";
-const PALE: &str = "#d9cdb5";
-const ACCENT: &str = "#d87935";
-const CYAN: &str = "#5de5e7";
-const PURPLE: &str = "#ba9bff";
-const GOLD: &str = "#ffd489";
-const NIGHT: &str = "#080f24";
+pub const PAPER: &str = "#f1e8d6";
+pub const INK: &str = "#302d28";
+pub const PRINT: &str = "#786d5c";
+pub const PALE: &str = "#d9cdb5";
+pub const ACCENT: &str = "#d87935";
+pub const CYAN: &str = "#5de5e7";
+pub const PURPLE: &str = "#ba9bff";
+pub const GOLD: &str = "#ffd489";
+pub const NIGHT: &str = "#080f24";
+
+thread_local! {
+    static PAPER_TEXTURE: RefCell<Option<HtmlCanvasElement>> = const { RefCell::new(None) };
+}
 
 /// Positions, rankings and scores come from the application's benchmark engine.
 pub struct Racer<'a> {
@@ -43,7 +50,7 @@ fn bezier([a, b, c, d]: Curve, t: f64) -> Point {
     )
 }
 
-struct Painter<'a>(&'a CanvasRenderingContext2d);
+pub struct Painter<'a>(pub &'a CanvasRenderingContext2d);
 impl Painter<'_> {
     fn finish(&self, fill: Option<&str>, stroke: Option<&str>, width: f64) {
         if let Some(color) = fill {
@@ -56,7 +63,7 @@ impl Painter<'_> {
             self.0.stroke();
         }
     }
-    fn ellipse(&self, p: Point, r: Point, fill: Option<&str>, stroke: Option<&str>, width: f64) {
+    pub fn ellipse(&self, p: Point, r: Point, fill: Option<&str>, stroke: Option<&str>, width: f64) {
         let (x, y) = p;
         let (rx, ry) = r;
         let k = 0.552_284_749_8;
@@ -73,10 +80,10 @@ impl Painter<'_> {
         self.0.close_path();
         self.finish(fill, stroke, width);
     }
-    fn dot(&self, p: Point, r: f64, color: &str) {
+    pub fn dot(&self, p: Point, r: f64, color: &str) {
         self.ellipse(p, (r, r), Some(color), None, 0.0);
     }
-    fn ring(&self, p: Point, r: f64, color: &str, width: f64) {
+    pub fn ring(&self, p: Point, r: f64, color: &str, width: f64) {
         self.ellipse(p, (r, r), None, Some(color), width);
     }
     fn rect(&self, b: [f64; 4], radius: f64, color: &str, stroke: Option<&str>) {
@@ -98,7 +105,7 @@ impl Painter<'_> {
         self.0.close_path();
         self.finish(Some(color), stroke, 2.0);
     }
-    fn line(&self, points: &[Point], color: &str, width: f64) {
+    pub fn line(&self, points: &[Point], color: &str, width: f64) {
         if let Some(p) = points.first() {
             self.0.begin_path();
             self.0.move_to(p.0, p.1);
@@ -108,7 +115,7 @@ impl Painter<'_> {
             self.finish(None, Some(color), width);
         }
     }
-    fn polygon(&self, points: &[Point], color: &str, stroke: Option<&str>) {
+    pub fn polygon(&self, points: &[Point], color: &str, stroke: Option<&str>) {
         if let Some(p) = points.first() {
             self.0.begin_path();
             self.0.move_to(p.0, p.1);
@@ -119,13 +126,13 @@ impl Painter<'_> {
             self.finish(Some(color), stroke, 2.0);
         }
     }
-    fn curve(&self, [a, b, c, d]: Curve, color: &str, width: f64) {
+    pub fn curve(&self, [a, b, c, d]: Curve, color: &str, width: f64) {
         self.0.begin_path();
         self.0.move_to(a.0, a.1);
         self.0.bezier_curve_to(b.0, b.1, c.0, c.1, d.0, d.1);
         self.finish(None, Some(color), width);
     }
-    fn faded(&self, opacity: f64, paint: impl FnOnce()) {
+    pub fn faded(&self, opacity: f64, paint: impl FnOnce()) {
         self.0.save();
         self.0
             .set_global_alpha(self.0.global_alpha() * opacity.clamp(0.0, 1.0));
@@ -155,7 +162,7 @@ impl Painter<'_> {
             yy += spacing;
         }
     }
-    fn text(
+    pub fn text(
         &self,
         value: &str,
         p: Point,
@@ -241,7 +248,9 @@ fn ornament(c: &Painter<'_>, p: Point, radius: f64, color: &str) {
     }
 }
 
-fn paper(c: &Painter<'_>, t: f64) {
+// Hundreds of print marks and contours are static. Draw them once into a
+// runtime canvas instead of crossing the WASM/Canvas boundary every frame.
+fn paper_texture(c: &Painter<'_>) {
     c.rect([0.0, 0.0, 1200.0, 675.0], 0.0, "#e8dcc4", None);
     if let Ok(g) =
         c.0.create_radial_gradient(650.0, 270.0, 30.0, 650.0, 300.0, 760.0)
@@ -326,7 +335,55 @@ fn paper(c: &Painter<'_>, t: f64) {
         (1135.0, 542.0),
     ];
     c.faded(0.22, || c.curve(path, ACCENT, 1.1));
-    c.faded(0.6, || c.signal(path, t / 31.0, ACCENT, 2.0));
+}
+
+fn cached_paper() -> Result<HtmlCanvasElement, JsValue> {
+    PAPER_TEXTURE.with(|stored| {
+        if let Some(canvas) = stored.borrow().as_ref() {
+            return Ok(canvas.clone());
+        }
+        let document = web_sys::window()
+            .and_then(|window| window.document())
+            .ok_or_else(|| JsValue::from_str("Browser document unavailable"))?;
+        let canvas: HtmlCanvasElement = document.create_element("canvas")?.dyn_into()?;
+        canvas.set_width(1200);
+        canvas.set_height(675);
+        let ctx: CanvasRenderingContext2d = canvas
+            .get_context("2d")?
+            .ok_or_else(|| JsValue::from_str("Canvas 2D unavailable"))?
+            .dyn_into()?;
+        ctx.save();
+        ctx.set_line_cap("round");
+        ctx.set_line_join("round");
+        paper_texture(&Painter(&ctx));
+        ctx.restore();
+        *stored.borrow_mut() = Some(canvas.clone());
+        Ok(canvas)
+    })
+}
+
+fn paper(c: &Painter<'_>, t: f64) {
+    if cached_paper()
+        .and_then(|canvas| c.0.draw_image_with_html_canvas_element(&canvas, 0.0, 0.0))
+        .is_err()
+    {
+        // Caching is only an optimization; direct drawing still works when
+        // an additional canvas or its backing storage is unavailable.
+        paper_texture(c);
+    }
+    c.faded(0.6, || {
+        c.signal(
+            [
+                (410.0, 542.0),
+                (610.0, 582.0),
+                (922.0, 516.0),
+                (1135.0, 542.0),
+            ],
+            t / 31.0,
+            ACCENT,
+            2.0,
+        );
+    });
     // Protect the title area without putting the illustration into a card.
     let g = c.0.create_linear_gradient(20.0, 0.0, 540.0, 0.0);
     let _ = g.add_color_stop(0.0, "rgba(243,233,212,.92)");
@@ -1821,6 +1878,390 @@ fn vision(c: &Painter<'_>, t: f64, electric: bool) {
     }
 }
 
+/// 1936: a tape that is read, written and stepped. The universal machine can
+/// follow any other machine's rules, so one device runs many procedures.
+fn tape_machine(c: &Painter<'_>, t: f64) {
+    plate(c, [352.0, 146.0, 1092.0, 508.0], 0.012, || {
+        // Two reels and the tape running between them.
+        for x in [438.0, 1006.0] {
+            c.ring((x, 232.0), 52.0, INK, 2.4);
+            c.ring((x, 232.0), 22.0, PRINT, 1.4);
+            for i in 0..6 {
+                let a = f64::from(i) * TAU / 6.0 + t * 0.35;
+                c.line(
+                    &[
+                        (x + a.cos() * 22.0, 232.0 + a.sin() * 22.0),
+                        (x + a.cos() * 50.0, 232.0 + a.sin() * 50.0),
+                    ],
+                    PRINT,
+                    0.9,
+                );
+            }
+        }
+        let cells = 14;
+        let cell = 39.0;
+        let left = 486.0;
+        let tape = [
+            left - 26.0,
+            180.0,
+            left + cell * f64::from(cells) + 22.0,
+            284.0,
+        ];
+        c.rect(tape, 3.0, "#f7eedb", Some(INK));
+        for i in 0..cells {
+            let x = left + f64::from(i) * cell;
+            if i > 0 {
+                c.line(&[(x, 182.0), (x, 282.0)], PRINT, 0.8);
+            }
+            // A repeating symbol row keeps the tape legible without text.
+            let symbol = (f64::from(i) + t * 0.9).rem_euclid(3.0) as u32;
+            let (cx, cy) = (x + cell / 2.0, 232.0);
+            match symbol {
+                0 => {
+                    c.ring((cx, cy), 10.0, INK, 1.6);
+                }
+                1 => {
+                    c.line(&[(cx - 10.0, cy - 10.0), (cx + 10.0, cy + 10.0)], INK, 1.6);
+                    c.line(&[(cx + 10.0, cy - 10.0), (cx - 10.0, cy + 10.0)], INK, 1.6);
+                }
+                _ => {
+                    c.dot((cx, cy), 7.0, INK);
+                }
+            }
+        }
+        // The head reads the current cell and reports to the state box.
+        let head = (left + cell * 5.5, 232.0);
+        c.polygon(
+            &[
+                (head.0, head.1 - 34.0),
+                (head.0 - 15.0, head.1 - 58.0),
+                (head.0 + 15.0, head.1 - 58.0),
+            ],
+            ACCENT,
+            Some(INK),
+        );
+        c.line(&[(head.0, 178.0), (head.0, 120.0)], PRINT, 1.4);
+        c.rect(
+            [head.0 - 88.0, 92.0, head.0 + 88.0, 126.0],
+            2.0,
+            PALE,
+            Some(INK),
+        );
+        // State, a written tape cell and movement, expressed without words.
+        c.ring((head.0 - 60.0, 109.0), 7.0, INK, 1.2);
+        c.dot((head.0 - 60.0, 109.0), 2.2, ACCENT);
+        for x in [head.0 - 41.0, head.0 + 16.0] {
+            c.line(&[(x, 109.0), (x + 20.0, 109.0)], PRINT, 1.2);
+            c.line(
+                &[(x + 15.0, 105.0), (x + 20.0, 109.0), (x + 15.0, 113.0)],
+                PRINT,
+                1.2,
+            );
+        }
+        c.rect(
+            [head.0 - 9.0, 101.0, head.0 + 7.0, 117.0],
+            0.0,
+            PAPER,
+            Some(INK),
+        );
+        c.dot((head.0 - 1.0, 109.0), 3.0, ACCENT);
+        c.line(&[(head.0 + 48.0, 109.0), (head.0 + 72.0, 109.0)], INK, 1.4);
+        for (x, direction) in [(head.0 + 48.0, 1.0), (head.0 + 72.0, -1.0)] {
+            c.line(
+                &[
+                    (x + direction * 5.0, 104.0),
+                    (x, 109.0),
+                    (x + direction * 5.0, 114.0),
+                ],
+                INK,
+                1.4,
+            );
+        }
+        // The table of rules that the machine follows.
+        c.faded(0.55, || {
+            for row in 0..5 {
+                let y = 330.0 + f64::from(row) * 26.0;
+                c.line(&[(560.0, y), (884.0, y)], PRINT, 0.7);
+                for col in 0..4 {
+                    let x = 560.0 + f64::from(col) * 81.0;
+                    c.line(&[(x, 318.0), (x, 430.0)], PRINT, 0.5);
+                }
+            }
+            for row in 0..5 {
+                for col in 0..4 {
+                    if (row as f64 + t * 0.6 + f64::from(col)).rem_euclid(4.0) < 1.0 {
+                        let x = 560.0 + f64::from(col) * 81.0;
+                        let y = 330.0 + f64::from(row) * 26.0;
+                        c.dot((x + 40.0, y - 8.0), 3.0, ACCENT);
+                    }
+                }
+            }
+        });
+        c.signal(
+            [
+                (head.0, 124.0),
+                (head.0, 210.0),
+                (head.0 - 40.0, 300.0),
+                (head.0 - 130.0, 330.0),
+            ],
+            t * 0.22,
+            ACCENT,
+            3.6,
+        );
+    });
+}
+
+/// 1956: a summer project and its proposal. The name is new; the open problems
+/// stay visible rather than being solved by naming them.
+fn dartmouth(c: &Painter<'_>, t: f64) {
+    plate(c, [318.0, 122.0, 872.0, 526.0], 0.014, || {
+        c.polygon(
+            &[
+                (352.0, 168.0),
+                (668.0, 168.0),
+                (700.0, 200.0),
+                (700.0, 470.0),
+                (352.0, 470.0),
+            ],
+            "#f9f0de",
+            Some(INK),
+        );
+        c.polygon(
+            &[(668.0, 168.0), (668.0, 200.0), (700.0, 200.0)],
+            PALE,
+            Some(INK),
+        );
+        // The proposal used the term in 1955, before the summer meeting.
+        let _ = c.text("1955", (378.0, 218.0), 22.0, ACCENT, 80.0);
+        for (row, width) in [72.0, 92.0, 58.0].iter().enumerate() {
+            let y = 211.0 + row as f64 * 7.0;
+            c.line(&[(455.0, y), (455.0 + width, y)], PRINT, 1.0);
+        }
+        for i in 0..4 {
+            let y = 256.0 + f64::from(i) * 24.0;
+            c.line(
+                &[(380.0, y), (664.0 - f64::from(i % 2) * 42.0, y)],
+                PRINT,
+                0.8,
+            );
+        }
+        // Three questions the programme set out to study.
+        for (i, y) in [356.0, 396.0, 436.0].iter().enumerate() {
+            c.dot((382.0, *y), 3.0, INK);
+            let w = 246.0 - f64::from(i as u32) * 34.0;
+            c.line(
+                &[(396.0, *y), (396.0 + w, *y)],
+                if i == 0 { INK } else { PRINT },
+                1.2,
+            );
+            c.line(
+                &[(396.0, *y + 9.0), (396.0 + w * 0.72, *y + 9.0)],
+                PRINT,
+                0.6,
+            );
+        }
+        // A round table of participants around one question mark.
+        let centre = (952.0, 300.0);
+        for i in 0..8 {
+            let a = f64::from(i) * TAU / 8.0 - 0.35 + 0.05 * (t * 0.4).sin();
+            let x = centre.0 + a.cos() * 118.0;
+            let y = centre.1 + a.sin() * 88.0;
+            c.line(
+                &[
+                    (x, y + 12.0),
+                    (centre.0 + a.cos() * 46.0, centre.1 + a.sin() * 34.0),
+                ],
+                PRINT,
+                0.7,
+            );
+            c.ellipse((x, y), (11.0, 13.0), Some(PALE), Some(INK), 1.4);
+            c.dot((x, y - 17.0), 6.0, INK);
+        }
+        c.ring(centre, 44.0, INK, 2.0);
+        c.faded(0.75, || {
+            // Unresolved, so the marks stay open rather than closing into an answer.
+            let pulse = 0.55 + 0.45 * (t * 0.9).sin();
+            c.faded(pulse, || c.ring(centre, 30.0, ACCENT, 2.4));
+            let _ = c.text("?", (936.0, centre.1), 34.0, INK, 40.0);
+        });
+    });
+}
+
+/// 1986: the error is sent backward so each layer can adjust its weights.
+fn backprop(c: &Painter<'_>, t: f64) {
+    plate(c, [438.0, 132.0, 1240.0, 520.0], -0.016, || {
+        let columns = [510.0, 686.0, 862.0, 1038.0];
+        let counts = [4_usize, 5, 5, 2];
+        let node = |col: usize, row: usize| -> Point {
+            let count = counts[col] as f64;
+            let y = 326.0 + (row as f64 - (count - 1.0) / 2.0) * 62.0;
+            (columns[col], y)
+        };
+        c.faded(0.5, || {
+            for col in 0..3 {
+                for a in 0..counts[col] {
+                    for b in 0..counts[col + 1] {
+                        c.line(&[node(col, a), node(col + 1, b)], PRINT, 0.45);
+                    }
+                }
+            }
+        });
+        // The forward pass lights edges left to right; the backward pass returns.
+        for col in 0..3 {
+            for a in 0..counts[col] {
+                for b in 0..counts[col + 1] {
+                    let phase = t * 0.22 + (a as f64 + b as f64) * 0.06;
+                    c.signal(
+                        [
+                            node(col, a),
+                            node(col, a),
+                            node(col + 1, b),
+                            node(col + 1, b),
+                        ],
+                        phase,
+                        ACCENT,
+                        2.4,
+                    );
+                    c.signal(
+                        [
+                            node(col + 1, b),
+                            node(col + 1, b),
+                            node(col, a),
+                            node(col, a),
+                        ],
+                        phase + 0.5,
+                        "#338b92",
+                        2.0,
+                    );
+                }
+            }
+        }
+        for (col, &count) in counts.iter().enumerate() {
+            for row in 0..count {
+                let p = node(col, row);
+                c.ellipse(p, (17.0, 17.0), Some(PALE), Some(INK), 1.6);
+                c.dot(p, 5.0, if col == 0 { INK } else { PRINT });
+            }
+        }
+        // Compare with the target and send the gap back through every layer.
+        c.ellipse(
+            (1150.0, 295.0),
+            (34.0, 34.0),
+            Some("#f7eedb"),
+            Some(INK),
+            1.6,
+        );
+        c.ellipse(
+            (1150.0, 357.0),
+            (34.0, 34.0),
+            Some("#f7eedb"),
+            Some(INK),
+            1.6,
+        );
+        // A predicted point and a target ring make the mismatch visible.
+        c.ring((1150.0, 295.0), 16.0, PRINT, 1.1);
+        c.dot((1159.0, 290.0), 4.0, ACCENT);
+        c.line(&[(1141.0, 357.0), (1159.0, 357.0)], ACCENT, 2.4);
+        c.line(&[(1141.0, 352.0), (1141.0, 362.0)], INK, 1.2);
+        c.line(&[(1159.0, 352.0), (1159.0, 362.0)], INK, 1.2);
+        c.line(&[(1038.0, 326.0), (1116.0, 300.0)], PRINT, 1.0);
+        let _ = c.text("∂", (1200.0, 340.0), 26.0, ACCENT, 40.0);
+    });
+}
+
+/// 1997: a chessboard and a search tree. Deep Blue's strength came from
+/// specialised hardware plus search and evaluation, not from learning.
+fn chessboard(c: &Painter<'_>, t: f64) {
+    plate(c, [330.0, 126.0, 900.0, 520.0], -0.012, || {
+        let (x0, y0, cell) = (372.0, 168.0, 30.0);
+        for row in 0..8 {
+            for col in 0..8 {
+                let x = x0 + f64::from(col) * cell;
+                let y = y0 + f64::from(row) * cell;
+                let light = (row + col) % 2 == 0;
+                c.rect(
+                    [x, y, x + cell, y + cell],
+                    0.0,
+                    if light { "#efe4cf" } else { "#8d8371" },
+                    Some(PRINT),
+                );
+            }
+        }
+        c.rect(
+            [x0, y0, x0 + cell * 8.0, y0 + cell * 8.0],
+            0.0,
+            "rgba(0,0,0,0)",
+            Some(INK),
+        );
+        // Two simplified pieces face each other across the board.
+        for (col, row, crown) in [(1_u32, 6_u32, true), (6, 1, false)] {
+            let cx = x0 + f64::from(col) * cell + cell / 2.0;
+            let cy = y0 + f64::from(row) * cell + cell / 2.0;
+            c.ellipse((cx, cy + 6.0), (12.0, 9.0), Some(PALE), Some(INK), 1.6);
+            c.rect([cx - 5.0, cy - 8.0, cx + 5.0, cy + 6.0], 2.0, INK, None);
+            c.ellipse((cx, cy - 10.0), (6.0, 5.0), Some(INK), None, 0.0);
+            if crown {
+                for k in -1..=1 {
+                    let tx = cx + f64::from(k) * 4.0;
+                    c.line(&[(tx, cy - 14.0), (tx, cy - 20.0)], INK, 1.4);
+                }
+            }
+        }
+        // The evaluation bar rises and falls as a candidate line is scored.
+        let sweep = (t * 0.35).rem_euclid(1.0);
+        let highlight = (sweep * 64.0).floor() as u32;
+        c.faded(0.16, || {
+            let row = highlight / 8;
+            let col = highlight % 8;
+            c.rect(
+                [
+                    x0 + f64::from(col) * cell,
+                    y0 + f64::from(row) * cell,
+                    x0 + f64::from(col + 1) * cell,
+                    y0 + f64::from(row + 1) * cell,
+                ],
+                0.0,
+                ACCENT,
+                None,
+            );
+        });
+        // A search tree: shallow breadth first, then a chosen principal line.
+        let root = (692.0, 348.0);
+        let branches: Vec<_> = (0..5)
+            .map(|i| {
+                let a = -0.95 + f64::from(i) * 0.475;
+                (root.0 + a.cos() * 92.0, root.1 + a.sin() * 92.0)
+            })
+            .collect();
+        for (i, p) in branches.iter().enumerate() {
+            let path = [root, (root.0 + 46.0, root.1), (p.0 - 46.0, p.1), *p];
+            c.curve(path, PRINT, 1.4);
+            if i % 2 == 0 {
+                c.signal(path, t * 0.3 + f64::from(i as u32) * 0.17, ACCENT, 3.4);
+            }
+            c.ring(*p, 7.0, INK, 1.6);
+            for k in 0..3 {
+                let b = -0.42 + f64::from(k) * 0.42;
+                let leaf = (p.0 + b.cos() * 52.0, p.1 + b.sin() * 52.0);
+                c.line(&[*p, leaf], PRINT, 0.9);
+                c.dot(leaf, 2.6, PALE);
+            }
+        }
+        c.ring(root, 11.0, INK, 2.4);
+        // Candidate evaluations remain a language-neutral miniature bar chart.
+        c.line(&[(770.0, 491.0), (864.0, 491.0)], PRINT, 0.8);
+        for (i, height) in [12.0, 23.0, 16.0, 32.0, 19.0].iter().enumerate() {
+            let x = 776.0 + i as f64 * 18.0;
+            c.rect(
+                [x, 490.0 - height, x + 9.0, 490.0],
+                0.0,
+                if i == 3 { ACCENT } else { PRINT },
+                None,
+            );
+        }
+    });
+}
+
 fn galaxy(c: &Painter<'_>, t: f64) -> Result<(), JsValue> {
     c.rect([0.0, 0.0, 1200.0, 675.0], 0.0, NIGHT, None);
     for (p, r, color) in [
@@ -1972,6 +2413,12 @@ pub fn draw_history(
                 6 => neural(&c, t, true),
                 7 => vision(&c, t, false),
                 8 => vision(&c, t, true),
+                15 => {
+                    // Include the output, target and error feedback at the right.
+                    let _ = ctx.translate(240.0, 62.0);
+                    let _ = ctx.scale(0.73, 0.86);
+                    backprop(&c, t);
+                }
                 _ => {
                     let _ = ctx.translate(354.0, 62.0);
                     let _ = ctx.scale(0.76, 0.86);
@@ -1982,6 +2429,9 @@ pub fn draw_history(
                         4 => instructions(&c, t),
                         10 => mechanical_theatre(&c, t),
                         11 => musical_boat(&c, t),
+                        12 => chessboard(&c, t),
+                        13 => tape_machine(&c, t),
+                        14 => dartmouth(&c, t),
                         _ => {}
                     }
                 }
