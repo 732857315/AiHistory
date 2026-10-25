@@ -15,11 +15,8 @@ pub mod animation;
 pub mod particles;
 #[cfg(target_arch = "wasm32")]
 pub mod scene_cache;
-// TODO: Re-enable after fixing text() method signatures
-// #[cfg(target_arch = "wasm32")]
-// pub mod explosive_scenes;
-// #[cfg(target_arch = "wasm32")]
-// pub mod transformer_scene;
+#[cfg(target_arch = "wasm32")]
+pub mod scenes;
 
 pub const LANGUAGES: [&str; 4] = ["zh", "en", "ja", "es"];
 pub const RACE_SECONDS: f64 = 180.0;

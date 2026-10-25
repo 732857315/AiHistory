@@ -2386,15 +2386,30 @@ pub fn draw_history(
     let c = Painter(ctx);
     let result = (|| {
         if phase == 9 {
-            galaxy(&c, t)?;
-            ctx.save();
-            let _ = ctx.translate(377.0, 51.0);
-            let _ = ctx.scale(0.66, 0.88);
-            attention(&c, t);
-            ctx.restore();
+            // Transformer attention storm - explosive reveal
+            if local_progress < 0.15 {
+                // Dramatic explosion intro
+                use crate::scenes::attention_storm::draw_attention_storm;
+                draw_attention_storm(ctx, local_progress * 6.67)?;
+            } else {
+                // Then show the galaxy + attention mechanism
+                galaxy(&c, t)?;
+                ctx.save();
+                let _ = ctx.translate(377.0, 51.0);
+                let _ = ctx.scale(0.66, 0.88);
+                attention(&c, t);
+                ctx.restore();
+            }
         } else {
             paper(&c, t);
-            if phase == 8 {
+
+            // AlexNet/ImageNet moment - neural awakening
+            if phase == 8 && local_progress < 0.2 {
+                use crate::scenes::neural_awakening::draw_neural_awakening;
+                ctx.save();
+                draw_neural_awakening(ctx, local_progress * 5.0)?;
+                ctx.restore();
+            } else if phase == 8 {
                 let g = ctx.create_linear_gradient(420.0, 140.0, 1120.0, 480.0);
                 let _ = g.add_color_stop(0.0, "rgba(66,134,139,0)");
                 let _ = g.add_color_stop(0.5, "rgba(66,134,139,.07)");
@@ -2402,6 +2417,15 @@ pub fn draw_history(
                 ctx.set_fill_style_canvas_gradient(&g);
                 ctx.fill_rect(420.0, 80.0, 780.0, 490.0);
             }
+
+            // Stone tools - the first impact
+            if phase == 0 && local_progress < 0.25 {
+                use crate::scenes::stone_impact::draw_stone_impact;
+                ctx.save();
+                draw_stone_impact(ctx, local_progress * 4.0)?;
+                ctx.restore();
+            }
+
             let reveal = (local_progress * 12.0).clamp(0.0, 1.0);
             let reveal = reveal * reveal * (3.0 - 2.0 * reveal);
             ctx.save();
